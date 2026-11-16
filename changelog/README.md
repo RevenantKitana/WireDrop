@@ -3,7 +3,8 @@
 Thư mục này lưu trữ toàn bộ các file changelog chi tiết của dự án **WireDrop**, được phân tách theo từng phiên bản và mốc phát triển.
 
 ## Danh Sách Changelog:
-* [v0.8.0 - Trang chủ điều phối (/#) & Tối giản giao diện bên nhận](v0.8.0-landing-page-and-minimal-ui.md) - *(2026-11-16)* 🚀 **Mới nhất**
+* [v0.9.0 - Tối giản ngôn ngữ & Trải nghiệm giao diện (UI/UX Refinement)](v0.9.0-ui-ux-refinement.md) - *(2026-11-16)* 🚀 **Mới nhất**
+* [v0.8.0 - Trang chủ điều phối (/#) & Tối giản giao diện bên nhận](v0.8.0-landing-page-and-minimal-ui.md) - *(2026-11-16)*
 * [v0.7.0 - Đổi tên dự án thành WireDrop (Rebranding to WireDrop)](v0.7.0-rename-to-wiredrop.md) - *(2026-11-16)*
 * [v0.6.0 - Hiện thực hóa Khóa kết nối vật lý thuần túy (v4.0.0)](v0.6.0-physical-connection-impl.md) - *(2026-11-16)*
 * [v0.5.0 - Đặc tả kiến trúc Khóa kết nối vật lý thuần túy (v4.0.0)](v0.5.0-physical-connection-lock.md) - *(2026-11-16)*

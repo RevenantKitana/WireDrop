@@ -91,57 +91,38 @@ body {
     color: var(--text-secondary);
 }
 
-/* SỢI DÂY 1-1 STATUS */
+/* TRẠNG THÁI TX ─── RX */
 .wire-status-card {
     display: flex;
     align-items: center;
     gap: 8px;
     background: #05080c;
     border: 1px solid var(--border-color);
-    padding: 6px 12px;
+    padding: 4px 10px;
     border-radius: 6px;
-    font-size: 0.82rem;
+    font-family: var(--font-code);
+    font-size: 0.8rem;
 }
 
-.status-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
+.status-node {
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    transition: all 0.2s ease;
 }
 
-.status-label {
+.status-node.connected {
+    color: var(--accent-green);
+    text-shadow: 0 0 6px rgba(46, 160, 67, 0.4);
+}
+
+.status-node.waiting {
     color: var(--text-secondary);
 }
 
-.status-val {
-    font-weight: 600;
-    font-family: var(--font-code);
-}
-
-.status-divider {
+.status-line {
     color: var(--border-color);
-    font-size: 0.7rem;
-    letter-spacing: -2px;
-}
-
-.status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-}
-
-.status-dot.connected {
-    background: var(--accent-green);
-    box-shadow: 0 0 8px var(--accent-green);
-}
-
-.status-dot.waiting {
-    background: var(--accent-yellow);
-    box-shadow: 0 0 8px var(--accent-yellow);
-}
-
-.status-dot.disconnected {
-    background: var(--accent-red);
+    font-size: 0.75rem;
+    letter-spacing: -1px;
 }
 
 /* BUTTONS */

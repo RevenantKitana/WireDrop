@@ -14,9 +14,8 @@
     // DOM Elements
     const badgeRole = document.getElementById("badgeRole");
     const badgeSlug = document.getElementById("badgeSlug");
-    const valSender = document.getElementById("valSender");
-    const dotReceiver = document.getElementById("dotReceiver");
-    const valReceiver = document.getElementById("valReceiver");
+    const nodeSender = document.getElementById("nodeSender");
+    const nodeReceiver = document.getElementById("nodeReceiver");
     const btnUnpair = document.getElementById("btnUnpair");
     const wireBadge = document.getElementById("wireBadge");
     const wireStatusCard = document.getElementById("wireStatusCard");
@@ -54,7 +53,6 @@
 
     const osTabs = document.querySelectorAll(".os-tab");
     const cheatCode = document.getElementById("cheatCode");
-    const cheatHint = document.getElementById("cheatHint");
     const btnCopyCheat = document.getElementById("btnCopyCheat");
 
     // Receiver Elements
@@ -69,7 +67,7 @@
 
     const toast = document.getElementById("toast");
 
-    // Phân giải URL để xác định Role (Home /#, Sender *-s, hoặc Receiver *-r)
+    // Phân giải URL để xác định Role (Home /#, TX *-s, hoặc RX *-r)
     function detectRoleAndSlug() {
         const path = window.location.pathname.replace(/^\/|\/$/g, "");
         const hash = window.location.hash;
@@ -77,7 +75,7 @@
         // Nếu đang ở trang chủ / hoặc /# hoặc /#guide
         if (path === "" || hash === "#" || hash === "#guide") {
             isHome = true;
-            document.title = "WireDrop - Sợi dây kết nối Web sang Terminal";
+            document.title = "WireDrop - Instant Web → Terminal Relay";
             if (homeView) homeView.style.display = "flex";
             if (senderView) senderView.style.display = "none";
             if (receiverView) receiverView.style.display = "none";
@@ -103,23 +101,23 @@
             isSender = true;
             currentSlug = path.slice(0, -2) || "1";
         } else {
-            // Nếu gõ link không có hậu tố (ví dụ /1)
+            // Mặc định là TX phòng đó
             isSender = true;
             currentSlug = path || "1";
             window.history.replaceState(null, "", `/${currentSlug}-s`);
         }
 
-        badgeRole.textContent = isSender ? "SENDER (PHÁT)" : "RECEIVER (NHẬN)";
+        badgeRole.textContent = isSender ? "TX" : "RX";
         badgeSlug.textContent = `/${currentSlug}-${isSender ? "s" : "r"}`;
 
         if (isSender) {
             senderView.style.display = "flex";
             receiverView.style.display = "none";
-            document.title = `WireDrop [Phát: /${currentSlug}-s]`;
+            document.title = `TX: /${currentSlug}-s • WireDrop`;
         } else {
             senderView.style.display = "none";
             receiverView.style.display = "flex";
-            document.title = `WireDrop [Nhận: /${currentSlug}-r]`;
+            document.title = `RX: /${currentSlug}-r • WireDrop`;
         }
 
         updateCheatCode();
@@ -129,10 +127,10 @@
     function showToast(msg) {
         toast.textContent = msg;
         toast.classList.add("show");
-        setTimeout(() => toast.classList.remove("show"), 2000);
+        setTimeout(() => toast.classList.remove("show"), 1800);
     }
 
-    function copyText(text, successMsg = "Đã sao chép vào clipboard!") {
+    function copyText(text, successMsg = "Đã copy ✓") {
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(text).then(() => showToast(successMsg));
         } else {
@@ -156,30 +154,25 @@
         if (currentOS === "linux") {
             if (isFileMode) {
                 cheatCode.textContent = `curl -sLJO ${targetUrl}`;
-                cheatHint.textContent = "Tải file nguyên bản về thư mục hiện tại với đúng tên file gốc.";
             } else {
                 cheatCode.textContent = `curl -sL ${targetUrl} | sh`;
-                cheatHint.textContent = "Kéo script về và thực thi trực tiếp qua bash shell.";
             }
         } else if (currentOS === "win") {
             if (isFileMode) {
-                const fname = activeFileName.textContent || "file.bin";
+                const fname = (activeFileName && activeFileName.textContent) || "file.bin";
                 cheatCode.textContent = `iwr ${targetUrl} -OutFile ${fname}`;
-                cheatHint.textContent = "Tải file về máy qua PowerShell.";
             } else {
                 cheatCode.textContent = `irm ${targetUrl} | iex`;
-                cheatHint.textContent = "Tải lệnh về và thực thi trực tiếp trong PowerShell.";
             }
         } else {
             cheatCode.textContent = targetUrl;
-            cheatHint.textContent = "Mở link trên trình duyệt máy B để xem và tải trực tiếp.";
         }
     }
 
     // Hiển thị màn hình khóa khi bị 409 Line Busy
     function showLockout(msg) {
-        lockoutTitle.textContent = isSender ? "ĐẦU PHÁT ĐANG BỊ CHIẾM GIỮ" : "ĐẦU NHẬN ĐANG BỊ CHIẾM GIỮ";
-        lockoutMsg.textContent = msg || "Đầu dây này đang có một cửa sổ hoặc tiến trình khác kết nối. Sợi dây tuân thủ nghiêm ngặt nguyên lý 1-1 vật lý: chỉ 1 kết nối được phép cắm tại một thời điểm.";
+        lockoutTitle.textContent = isSender ? "TX ĐANG BẬN" : "RX ĐANG BẬN";
+        lockoutMsg.textContent = msg || "Đầu dây này đang có một kết nối khác chiếm giữ. WireDrop chỉ cho phép đúng 1 kết nối tại một thời điểm.";
         lockoutModal.style.display = "flex";
     }
 
@@ -187,7 +180,7 @@
         lockoutModal.style.display = "none";
     }
 
-    // Kết nối SSE để theo dõi trạng thái sợi dây và duy trì kết nối vật lý
+    // Kết nối SSE để duy trì kết nối vật lý và theo dõi trạng thái
     function connectSSE() {
         if (isHome) return;
 
@@ -198,7 +191,6 @@
 
         const role = isSender ? "sender" : "receiver";
 
-        // Bước 1: Pre-check xem đầu dây có bị cửa sổ khác chiếm giữ không
         fetch(`/${currentSlug}/events?role=${role}&conn=${connId}&check=1`)
             .then(res => {
                 if (res.status === 409) {
@@ -224,34 +216,36 @@
                 const data = JSON.parse(e.data);
                 handleWireStatus(data);
                 renderPayload(data);
-            } catch (err) {
-                console.error("Lỗi parse SSE init:", err);
-            }
+            } catch (err) {}
         });
 
         eventSource.addEventListener("partner_paired", () => {
-            dotReceiver.className = "status-dot connected";
-            valReceiver.textContent = "Đã cắm kết nối (Khóa 1-1 ✓)";
-            if (isSender) btnUnpair.style.display = "inline-flex";
-            showToast("Máy B đã cắm vào đầu nhận!");
+            if (nodeReceiver) {
+                nodeReceiver.className = "status-node connected";
+                nodeReceiver.textContent = "RX ●";
+                nodeReceiver.title = "RX đã kết nối";
+            }
+            if (isSender && btnUnpair) btnUnpair.style.display = "inline-flex";
+            showToast("RX đã kết nối ✓");
         });
 
         eventSource.addEventListener("partner_unpaired", () => {
-            dotReceiver.className = "status-dot waiting";
-            valReceiver.textContent = "Đang chờ cắm dây...";
-            btnUnpair.style.display = "none";
+            if (nodeReceiver) {
+                nodeReceiver.className = "status-node waiting";
+                nodeReceiver.textContent = "RX ○";
+                nodeReceiver.title = "RX đang chờ";
+            }
+            if (btnUnpair) btnUnpair.style.display = "none";
         });
 
         eventSource.addEventListener("payload_updated", (e) => {
             try {
                 const data = JSON.parse(e.data);
                 if (isSender) {
-                    // Trên Sender: Không ghi đè nếu đang tự tay gõ
                     if (data.type === "file") {
                         showActiveFile(data.name, data.size);
                     }
                 } else {
-                    // Trên Receiver: Cập nhật ngay lập tức giao diện Chỉ Đọc
                     if (data.type === "text") {
                         showRecvText(data.content);
                     } else if (data.type === "file") {
@@ -264,12 +258,11 @@
         eventSource.addEventListener("payload_cleared", () => {
             if (!isSender) {
                 showRecvEmpty();
-                showToast("Dữ liệu đã được tiêu thụ. Đường ống tự hủy!");
+                showToast("Dữ liệu đã tự hủy ✓");
             }
         });
 
         eventSource.onerror = () => {
-            // Kiểm tra xem có bị ngắt do kết nối khác chiếm hay không
             fetch(`/${currentSlug}/events?role=${role}&conn=${connId}&check=1`)
                 .then(res => {
                     if (res.status === 409) {
@@ -281,23 +274,29 @@
         };
     }
 
-    // Cập nhật đèn trạng thái dây 1-1
+    // Cập nhật trạng thái kết nối TX ─── RX
     function handleWireStatus(data) {
         if (data.receiver_paired || data.paired) {
-            dotReceiver.className = "status-dot connected";
-            valReceiver.textContent = "Đã cắm kết nối (Khóa 1-1 ✓)";
-            if (isSender) btnUnpair.style.display = "inline-flex";
+            if (nodeReceiver) {
+                nodeReceiver.className = "status-node connected";
+                nodeReceiver.textContent = "RX ●";
+                nodeReceiver.title = "RX đã kết nối";
+            }
+            if (isSender && btnUnpair) btnUnpair.style.display = "inline-flex";
         } else {
-            dotReceiver.className = "status-dot waiting";
-            valReceiver.textContent = "Đang chờ cắm dây...";
-            btnUnpair.style.display = "none";
+            if (nodeReceiver) {
+                nodeReceiver.className = "status-node waiting";
+                nodeReceiver.textContent = "RX ○";
+                nodeReceiver.title = "RX đang chờ";
+            }
+            if (btnUnpair) btnUnpair.style.display = "none";
         }
     }
 
-    // Hiển thị vật phẩm trong khe cắm khi vừa mở trang
+    // Hiển thị payload khi vừa mở trang
     function renderPayload(data) {
         if (isSender) {
-            if (data.slot_type === 2) { // File
+            if (data.slot_type === 2) {
                 showActiveFile(data.slot_file_name, data.slot_file_size);
             } else {
                 if (!isLocalTyping) {
@@ -306,7 +305,6 @@
                 showTextEditor();
             }
         } else {
-            // Receiver
             if (data.slot_type === 2) {
                 showRecvFile(data.slot_file_name, data.slot_file_size);
             } else if (data.slot_type === 1 && data.slot_text) {
@@ -317,7 +315,6 @@
         }
     }
 
-    // Chuyển sang chế độ soạn Text trên Sender
     function showTextEditor() {
         btnModeText.classList.add("active");
         btnModeFile.classList.remove("active");
@@ -327,7 +324,6 @@
         updateCheatCode();
     }
 
-    // Chuyển sang chế độ File trên Sender
     function showFileDropzone() {
         btnModeFile.classList.add("active");
         btnModeText.classList.remove("active");
@@ -355,7 +351,7 @@
         recvTextSection.style.display = "none";
         recvFileSection.style.display = "block";
         recvFileName.textContent = name;
-        recvFileSize.textContent = `Dung lượng: ${formatSize(size)}`;
+        recvFileSize.textContent = formatSize(size);
         btnDownloadFile.href = `/${currentSlug}-r?conn=${connId}`;
         btnDownloadFile.download = name;
     }
@@ -363,7 +359,7 @@
     function showRecvEmpty() {
         recvTextSection.style.display = "block";
         recvFileSection.style.display = "none";
-        recvTextDisplay.querySelector("code").textContent = "# Đang chờ Máy A phát dữ liệu...";
+        recvTextDisplay.querySelector("code").textContent = "# Đang chờ dữ liệu...";
     }
 
     function formatSize(bytes) {
@@ -372,10 +368,10 @@
         return Math.max(1, Math.round(bytes / 1024)) + " KB";
     }
 
-    // Auto-save Text trên Sender kèm theo connId
+    // Auto-save Text
     function autoSaveText() {
         if (!isSender || isHome) return;
-        syncIndicator.textContent = "Đang lưu...";
+        syncIndicator.textContent = "Lưu...";
         isLocalTyping = true;
 
         clearTimeout(saveTimeout);
@@ -388,16 +384,16 @@
             })
             .then(res => {
                 if (res.ok) {
-                    syncIndicator.textContent = "Đã nạp vào ống ✓";
+                    syncIndicator.textContent = "Đã lưu ✓";
                 } else if (res.status === 409) {
-                    syncIndicator.textContent = "Bị khóa (Line Busy)!";
-                    showLockout("Cửa sổ này đã mất quyền phát vì có kết nối khác!");
+                    syncIndicator.textContent = "Bị khóa!";
+                    showLockout("TX đang bị kết nối khác chiếm giữ.");
                 } else {
-                    syncIndicator.textContent = "Lỗi nạp!";
+                    syncIndicator.textContent = "Lỗi lưu!";
                 }
             })
             .catch(() => {
-                syncIndicator.textContent = "Mất kết nối!";
+                syncIndicator.textContent = "Mất mạng!";
             })
             .finally(() => {
                 setTimeout(() => { isLocalTyping = false; }, 300);
@@ -405,7 +401,7 @@
         }, 300);
     }
 
-    // Upload duy nhất 1 File kèm theo connId
+    // Upload 1 File
     function uploadSingleFile(file) {
         if (!file || !isSender || isHome) return;
 
@@ -419,19 +415,19 @@
         })
         .then(res => {
             if (res.status === 409) {
-                showLockout("Không thể upload: Đầu phát đang bị chiếm!");
+                showLockout("TX đang bị chiếm giữ.");
                 throw new Error("409");
             }
             return res.json();
         })
         .then(data => {
             showActiveFile(data.name, data.size);
-            syncIndicator.textContent = "File đã nạp vào ống ✓";
-            showToast(`Đã nạp file ${data.name} vào đường ống!`);
+            syncIndicator.textContent = "Đã nạp ✓";
+            showToast(`Đã nạp ${data.name} ✓`);
         })
         .catch(err => {
             if (err.message !== "409") {
-                syncIndicator.textContent = "Lỗi upload file!";
+                syncIndicator.textContent = "Lỗi upload!";
             }
         });
     }
@@ -478,24 +474,24 @@
         if (e.dataTransfer.files.length > 0) uploadSingleFile(e.dataTransfer.files[0]);
     });
 
-    btnCopyCheat.addEventListener("click", () => copyText(cheatCode.textContent, "Đã copy câu lệnh cho máy B!"));
+    btnCopyCheat.addEventListener("click", () => copyText(cheatCode.textContent, "Đã copy lệnh ✓"));
 
     if (btnCopyRecvText) {
         btnCopyRecvText.addEventListener("click", () => {
             const code = recvTextDisplay.querySelector("code").textContent;
-            copyText(code, "Đã copy toàn bộ nội dung lệnh!");
+            copyText(code, "Đã copy nội dung ✓");
         });
     }
 
-    // Mở khóa đầu nhận (Reset receiver)
+    // Reset RX
     btnUnpair.addEventListener("click", () => {
-        if (confirm("Mở khóa đầu nhận để cho phép máy khác cắm vào sợi dây?")) {
+        if (confirm("Mở khóa RX để cho kết nối khác cắm vào?")) {
             fetch(`/${currentSlug}/reset-receiver`, { method: "POST" })
-                .then(() => showToast("Đã mở khóa đầu nhận!"));
+                .then(() => showToast("Đã mở khóa RX"));
         }
     });
 
-    // Thử kết nối lại trên Lockout Modal
+    // Thử lại khi khóa
     btnRetryConn.addEventListener("click", () => {
         connectSSE();
     });

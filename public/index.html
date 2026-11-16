@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WireDrop - Unidirectional Wire</title>
+    <title>WireDrop - Instant Web → Terminal Relay</title>
     <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -11,121 +11,106 @@
         <!-- HEADER -->
         <header class="app-header">
             <div class="header-left">
-                <a href="/#" class="logo" id="logoLink" title="Về trang chủ hướng dẫn">
+                <a href="/#" class="logo" id="logoLink" title="WireDrop Home">
                     <span class="logo-icon">⚡</span>
                     <span class="logo-text">WireDrop</span>
                 </a>
-                <div class="wire-badge" id="wireBadge">
-                    <span class="badge-role" id="badgeRole">SENDER</span>
+                <div class="wire-badge" id="wireBadge" style="display: none;">
+                    <span class="badge-role" id="badgeRole">TX</span>
                     <span class="badge-slug" id="badgeSlug">/1-s</span>
                 </div>
             </div>
 
             <div class="header-right">
-                <!-- Dây trạng thái 1-1 -->
-                <div class="wire-status-card" id="wireStatusCard">
-                    <div class="status-item">
-                        <span class="status-dot connected"></span>
-                        <span class="status-label">Đầu Phát:</span>
-                        <span class="status-val" id="valSender">Bạn (Connected)</span>
-                    </div>
-                    <div class="status-divider">════</div>
-                    <div class="status-item">
-                        <span class="status-dot waiting" id="dotReceiver"></span>
-                        <span class="status-label">Đầu Nhận:</span>
-                        <span class="status-val" id="valReceiver">Đang chờ cắm dây...</span>
-                        <button id="btnUnpair" class="btn btn-tiny btn-danger" style="display:none;" title="Ngắt kết nối với máy hiện tại để cho máy khác cắm vào">Mở khóa</button>
-                    </div>
+                <!-- TRẠNG THÁI KẾT NỐI 1-1 -->
+                <div class="wire-status-card" id="wireStatusCard" style="display: none;">
+                    <span class="status-node connected" id="nodeSender" title="Bên Phát (TX)">TX ●</span>
+                    <span class="status-line">───</span>
+                    <span class="status-node waiting" id="nodeReceiver" title="Bên Nhận (RX)">RX ○</span>
+                    <button id="btnUnpair" class="btn btn-tiny btn-danger" style="display:none;" title="Ngắt kết nối RX">✕</button>
                 </div>
             </div>
         </header>
 
-        <!-- HOME / GUIDE VIEW (Hiển thị khi truy cập / hoặc /#) -->
+        <!-- 1. HOME / GUIDE VIEW (/ hoặc /#) -->
         <main class="view-panel" id="homeView" style="display: none;">
             <div class="home-hero">
                 <h1 class="hero-title">⚡ WireDrop</h1>
-                <p class="hero-subtitle">Sợi dây 2 đầu thuần 1 chiều nối Web sang Terminal & Máy Ảo</p>
-                <p class="hero-desc">Truyền lệnh shell, script dài hoặc file nhị phân tức thì mà không cần gõ tay, không cần tài khoản, tự hủy sau khi đọc.</p>
+                <p class="hero-subtitle">Instant Web → Terminal Relay</p>
+                <p class="hero-desc">Truyền script, lệnh và file trực tiếp sang Terminal & Máy Ảo. Khóa 1-1 vật lý, tự hủy sau khi nhận.</p>
             </div>
 
-            <!-- ROOM LAUNCHER BOX -->
+            <!-- ROOM LAUNCHER -->
             <div class="room-launcher-card">
                 <div class="launcher-header">
                     <span class="launcher-icon">🔌</span>
-                    <span class="launcher-title">BẮT ĐẦU CẮM SỢI DÂY</span>
+                    <span class="launcher-title">KẾT NỐI</span>
                 </div>
                 <div class="launcher-form">
-                    <div class="input-group">
-                        <label for="roomInput">Mã phòng (Slug):</label>
-                        <div class="input-with-prefix">
-                            <span class="url-prefix">/</span>
-                            <input type="text" id="roomInput" value="1" placeholder="ví dụ: 1, setup, myvm" />
-                        </div>
+                    <div class="input-with-prefix">
+                        <span class="url-prefix">/</span>
+                        <input type="text" id="roomInput" value="1" placeholder="room-id" autofocus />
                     </div>
                     <div class="launcher-buttons">
-                        <button id="btnOpenSender" class="btn btn-primary btn-large">⚡ Mở Đầu Phát (*-s)</button>
-                        <button id="btnOpenReceiver" class="btn btn-secondary btn-large">📥 Mở Đầu Nhận (*-r)</button>
+                        <button id="btnOpenSender" class="btn btn-primary">📤 Mở TX (Phát)</button>
+                        <button id="btnOpenReceiver" class="btn btn-secondary">📥 Mở RX (Nhận)</button>
                     </div>
                 </div>
                 <div class="launcher-quick">
-                    <span>Vào nhanh:</span>
-                    <a href="/1-s" class="quick-link">/1-s (Đầu Phát)</a>
+                    <span>Mặc định:</span>
+                    <a href="/1-s" class="quick-link">/1-s (TX)</a>
                     <span class="sep">•</span>
-                    <a href="/1-r" class="quick-link">/1-r (Đầu Nhận)</a>
+                    <a href="/1-r" class="quick-link">/1-r (RX)</a>
                 </div>
             </div>
 
-            <!-- 3-STEP QUICK GUIDE -->
+            <!-- 3-STEP GUIDE -->
             <div class="home-guide-grid">
                 <div class="guide-step-card">
-                    <div class="step-badge">BƯỚC 1</div>
-                    <h3>Máy A (Bên Phát)</h3>
-                    <p>Mở trình duyệt vào <code>/:room-s</code> (ví dụ: <code>/1-s</code>). Soạn lệnh shell, kịch bản hoặc kéo thả 1 file nhị phân vào đường ống.</p>
+                    <div class="step-badge">1. TX (SEND)</div>
+                    <h3>Dán lệnh / Thả file</h3>
+                    <p>Mở <code>/:room-s</code> trên trình duyệt. Soạn kịch bản shell hoặc kéo thả 1 file.</p>
                 </div>
                 <div class="guide-step-card">
-                    <div class="step-badge">BƯỚC 2</div>
-                    <h3>Máy B (Bên Nhận)</h3>
-                    <p>Trên console máy đích (VM / Linux / Windows), gõ 1 dòng duy nhất để hút dữ liệu về chạy:</p>
+                    <div class="step-badge">2. RX (RECV)</div>
+                    <h3>1 Dòng trên Terminal</h3>
                     <div class="step-code">
                         <div><strong>Windows:</strong> <code>irm domain/1-r | iex</code></div>
                         <div><strong>Linux:</strong> <code>curl -sL domain/1-r | sh</code></div>
-                        <div><strong>Tải file:</strong> <code>curl -sLJO domain/1-r</code></div>
+                        <div><strong>File:</strong> <code>curl -sLJO domain/1-r</code></div>
                     </div>
                 </div>
                 <div class="guide-step-card">
-                    <div class="step-badge">BƯỚC 3</div>
-                    <h3>Khóa 1-1 & Tự Hủy</h3>
-                    <p>Mỗi đầu dây chỉ nhận <strong>đúng 1 kết nối active</strong>. Khi Máy B nhận xong, dữ liệu <strong>tự hủy vĩnh viễn</strong> (Burn-After-Read), chống nghe lén tuyệt đối.</p>
+                    <div class="step-badge">3. SAFE</div>
+                    <h3>Khóa 1-1 & Tự hủy</h3>
+                    <p>Đúng 1 kết nối active. Nhận xong tự xóa sạch dữ liệu (Burn-After-Read), chống nghe lén.</p>
                 </div>
             </div>
         </main>
 
-        <!-- SENDER VIEW (Chỉ hiển thị khi URL là *-s) -->
-        <main class="view-panel" id="senderView">
-            <!-- SLOT SWITCHER (Chỉ gửi 1 thứ tại 1 thời điểm) -->
+        <!-- 2. SENDER VIEW (*-s) -->
+        <main class="view-panel" id="senderView" style="display: none;">
+            <!-- SLOT MODE BAR -->
             <div class="slot-mode-bar">
-                <span class="slot-label">VẬT PHẨM TRONG ỐNG:</span>
                 <div class="slot-buttons">
-                    <button class="slot-btn active" id="btnModeText">📝 1 Đoạn Lệnh / Script</button>
-                    <button class="slot-btn" id="btnModeFile">📁 1 File Duy Nhất</button>
+                    <button class="slot-btn active" id="btnModeText">📝 Text</button>
+                    <button class="slot-btn" id="btnModeFile">📁 File</button>
                 </div>
                 <span class="sync-indicator" id="syncIndicator">Đã lưu ✓</span>
             </div>
 
-            <!-- CHẾ ĐỘ 1: TEXT / SCRIPT EDITOR -->
+            <!-- CHẾ ĐỘ TEXT -->
             <div class="editor-container" id="editorContainer">
-                <textarea id="senderTextarea" spellcheck="false" placeholder="# Nhập câu lệnh, shell script dài, hoặc token vào đây...
-sudo apt update && sudo apt install -y htop
-Write-Host 'Hello from WireDrop'
+                <textarea id="senderTextarea" spellcheck="false" placeholder="# Nhập lệnh shell, script hoặc token...
+Write-Host 'Hello from WireDrop' -ForegroundColor Green
 "></textarea>
             </div>
 
-            <!-- CHẾ ĐỘ 2: SINGLE FILE DROPZONE -->
+            <!-- CHẾ ĐỘ FILE -->
             <div class="file-dropzone" id="fileDropzone" style="display: none;">
                 <div class="dropzone-box" id="dropzoneBox">
                     <span class="dropzone-icon">📤</span>
-                    <p class="dropzone-main" id="dropzoneText">Kéo & thả duy nhất 1 file vào đây</p>
-                    <p class="dropzone-sub">File sẽ thay thế khe cắm của đường ống (Hỗ trợ file nhỏ hoặc file nhiều GB)</p>
+                    <p class="dropzone-main" id="dropzoneText">Kéo thả file vào đây (hoặc click để chọn)</p>
                     <input type="file" id="singleFileInput" style="display: none;" />
                 </div>
                 <div class="file-active-card" id="fileActiveCard" style="display: none;">
@@ -133,47 +118,40 @@ Write-Host 'Hello from WireDrop'
                         <span class="file-icon">📄</span>
                         <div>
                             <p class="file-name" id="activeFileName">backup.zip</p>
-                            <p class="file-size" id="activeFileSize">52.4 MB</p>
+                            <p class="file-size" id="activeFileSize">0 KB</p>
                         </div>
                     </div>
-                    <button id="btnRemoveFile" class="btn btn-small btn-danger">Hủy file / Đổi lại Text</button>
+                    <button id="btnRemoveFile" class="btn btn-small btn-danger">✕ Hủy file</button>
                 </div>
             </div>
 
-            <!-- CHEATSHEET HƯỚNG DẪN MÁY B NHẬN -->
+            <!-- TARGET COMMAND CHEATSHEET -->
             <div class="runner-instructions">
                 <div class="inst-header">
-                    <span class="inst-title">💡 LỆNH ĐƯA CHO MÁY B (VM CONSOLE) ĐỂ HÚT DỮ LIỆU</span>
+                    <span class="inst-title">LỆNH CHẠY TRÊN MÁY ĐÍCH (RX):</span>
                     <div class="os-toggles">
-                        <button class="os-tab active" data-os="linux">Linux (curl)</button>
-                        <button class="os-tab" data-os="win">Windows (PowerShell)</button>
-                        <button class="os-tab" data-os="browser">Trình duyệt</button>
+                        <button class="os-tab active" data-os="linux">Linux</button>
+                        <button class="os-tab" data-os="win">Windows</button>
+                        <button class="os-tab" data-os="browser">Web</button>
                     </div>
                 </div>
                 <div class="code-box">
                     <code id="cheatCode">curl -sL http://localhost:8080/1-r | sh</code>
-                    <button id="btnCopyCheat" class="btn btn-primary">Copy 1-Click</button>
+                    <button id="btnCopyCheat" class="btn btn-primary">Copy</button>
                 </div>
-                <p class="cheat-hint" id="cheatHint">Máy B gõ câu trên sẽ lập tức kéo dữ liệu về máy.</p>
             </div>
         </main>
 
-        <!-- RECEIVER VIEW (Chỉ hiển thị khi URL là *-r) -->
+        <!-- 3. RECEIVER VIEW (*-r) -->
         <main class="view-panel" id="receiverView" style="display: none;">
-            <div class="receiver-banner">
-                <div class="banner-title">📥 ĐẦU NHẬN (WORKER B) - CHẾ ĐỘ CHỈ ĐỌC (READ-ONLY)</div>
-                <div class="banner-sub">Nội dung này được phát trực tiếp từ Máy A. Bạn không thể sửa đổi kịch bản gốc.</div>
-            </div>
-
-            <!-- HIỂN THỊ NỘI DUNG NHẬN ĐƯỢC -->
             <div class="receiver-content-box">
                 <!-- Khi nhận Text -->
                 <div id="recvTextSection">
                     <div class="content-header">
-                        <span class="content-title">NỘI DUNG LỆNH NHẬN ĐƯỢC:</span>
-                        <button id="btnCopyRecvText" class="btn btn-primary">📋 Copy Toàn Bộ</button>
+                        <span class="content-title">DỮ LIỆU NHẬN (RX):</span>
+                        <button id="btnCopyRecvText" class="btn btn-primary">📋 Copy</button>
                     </div>
-                    <pre class="readonly-terminal" id="recvTextDisplay"><code># Đang chờ Máy A phát dữ liệu...</code></pre>
+                    <pre class="readonly-terminal" id="recvTextDisplay"><code># Đang chờ dữ liệu...</code></pre>
                 </div>
 
                 <!-- Khi nhận File -->
@@ -182,9 +160,9 @@ Write-Host 'Hello from WireDrop'
                         <span class="file-huge-icon">📦</span>
                         <div class="file-details">
                             <h3 id="recvFileName">setup.zip</h3>
-                            <p id="recvFileSize">Dung lượng: 0 KB</p>
+                            <p id="recvFileSize">0 KB</p>
                         </div>
-                        <a id="btnDownloadFile" class="btn btn-primary btn-large" href="#" download>💾 Tải File Về Máy</a>
+                        <a id="btnDownloadFile" class="btn btn-primary btn-large" href="#" download>⬇ Tải File</a>
                     </div>
                 </div>
             </div>
@@ -192,19 +170,19 @@ Write-Host 'Hello from WireDrop'
 
         <!-- FOOTER -->
         <footer class="app-footer">
-            <span>WireDrop v4.0.0 • Pure Physical Connection Lock • 1-to-1 Two-Ended Wire</span>
+            <span>WireDrop v4.0.0 • Pure Physical 1-1 Lock</span>
             <span><a href="/health" target="_blank">Health: OK</a></span>
         </footer>
     </div>
 
-    <!-- LOCKOUT MODAL (Khi có kết nối khác đang chiếm giữ đầu dây) -->
+    <!-- LOCKOUT MODAL -->
     <div id="lockoutModal" class="lockout-overlay" style="display: none;">
         <div class="lockout-box">
             <div class="lockout-icon">🔒</div>
-            <h2 id="lockoutTitle">ĐẦU DÂY ĐANG BỊ CHIẾM GIỮ</h2>
-            <p id="lockoutMsg">Một cửa sổ khác đang cắm vào đầu dây này. Sợi dây WireDrop tuân thủ nghiêm ngặt nguyên lý 1-1 vật lý: chỉ 1 cửa sổ/tiến trình được phép kết nối tại một thời điểm.</p>
+            <h2 id="lockoutTitle">KẾT NỐI ĐANG BẬN</h2>
+            <p id="lockoutMsg">Đầu dây này đã có một kết nối khác chiếm giữ. WireDrop chỉ cho phép duy nhất 1 kết nối tại một thời điểm.</p>
             <div class="lockout-actions">
-                <button id="btnRetryConn" class="btn btn-primary">🔄 Thử kết nối lại (Sau khi đóng cửa sổ kia)</button>
+                <button id="btnRetryConn" class="btn btn-primary">🔄 Thử kết nối lại</button>
             </div>
         </div>
     </div>
