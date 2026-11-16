@@ -1,0 +1,11 @@
+.git
+*.exe
+*.exe~
+*.log
+*.tmp
+*.md
+changelog/
+rule/
+scratch/
+test_*.ps1
+test_*.sh
