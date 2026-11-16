@@ -2,6 +2,7 @@
 (function () {
     let currentSlug = "1";
     let isSender = true;
+    let isHome = false;
     let currentOS = "linux";
     let eventSource = null;
     let saveTimeout = null;
@@ -17,9 +18,18 @@
     const dotReceiver = document.getElementById("dotReceiver");
     const valReceiver = document.getElementById("valReceiver");
     const btnUnpair = document.getElementById("btnUnpair");
+    const wireBadge = document.getElementById("wireBadge");
+    const wireStatusCard = document.getElementById("wireStatusCard");
 
+    // Views
+    const homeView = document.getElementById("homeView");
     const senderView = document.getElementById("senderView");
     const receiverView = document.getElementById("receiverView");
+
+    // Home Launcher Elements
+    const roomInput = document.getElementById("roomInput");
+    const btnOpenSender = document.getElementById("btnOpenSender");
+    const btnOpenReceiver = document.getElementById("btnOpenReceiver");
 
     // Lockout Elements
     const lockoutModal = document.getElementById("lockoutModal");
@@ -59,9 +69,33 @@
 
     const toast = document.getElementById("toast");
 
-    // Phân giải URL để xác định Role (Sender *-s hay Receiver *-r)
+    // Phân giải URL để xác định Role (Home /#, Sender *-s, hoặc Receiver *-r)
     function detectRoleAndSlug() {
         const path = window.location.pathname.replace(/^\/|\/$/g, "");
+        const hash = window.location.hash;
+
+        // Nếu đang ở trang chủ / hoặc /# hoặc /#guide
+        if (path === "" || hash === "#" || hash === "#guide") {
+            isHome = true;
+            document.title = "WireDrop - Sợi dây kết nối Web sang Terminal";
+            if (homeView) homeView.style.display = "flex";
+            if (senderView) senderView.style.display = "none";
+            if (receiverView) receiverView.style.display = "none";
+            if (wireBadge) wireBadge.style.display = "none";
+            if (wireStatusCard) wireStatusCard.style.display = "none";
+
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+            return;
+        }
+
+        isHome = false;
+        if (homeView) homeView.style.display = "none";
+        if (wireBadge) wireBadge.style.display = "inline-flex";
+        if (wireStatusCard) wireStatusCard.style.display = "flex";
+
         if (path.endsWith("-r")) {
             isSender = false;
             currentSlug = path.slice(0, -2) || "1";
@@ -69,7 +103,7 @@
             isSender = true;
             currentSlug = path.slice(0, -2) || "1";
         } else {
-            // Mặc định là Sender phòng 1
+            // Nếu gõ link không có hậu tố (ví dụ /1)
             isSender = true;
             currentSlug = path || "1";
             window.history.replaceState(null, "", `/${currentSlug}-s`);
@@ -87,6 +121,9 @@
             receiverView.style.display = "flex";
             document.title = `WireDrop [Nhận: /${currentSlug}-r]`;
         }
+
+        updateCheatCode();
+        connectSSE();
     }
 
     function showToast(msg) {
@@ -111,6 +148,7 @@
 
     // Cập nhật câu lệnh mẫu Cheat-sheet
     function updateCheatCode() {
+        if (isHome) return;
         const origin = window.location.origin;
         const targetUrl = `${origin}/${currentSlug}-r`;
         const isFileMode = btnModeFile && btnModeFile.classList.contains("active");
@@ -151,6 +189,8 @@
 
     // Kết nối SSE để theo dõi trạng thái sợi dây và duy trì kết nối vật lý
     function connectSSE() {
+        if (isHome) return;
+
         if (eventSource) {
             eventSource.close();
             eventSource = null;
@@ -334,7 +374,7 @@
 
     // Auto-save Text trên Sender kèm theo connId
     function autoSaveText() {
-        if (!isSender) return;
+        if (!isSender || isHome) return;
         syncIndicator.textContent = "Đang lưu...";
         isLocalTyping = true;
 
@@ -367,7 +407,7 @@
 
     // Upload duy nhất 1 File kèm theo connId
     function uploadSingleFile(file) {
-        if (!file || !isSender) return;
+        if (!file || !isSender || isHome) return;
 
         const formData = new FormData();
         formData.append("file", file);
@@ -470,8 +510,34 @@
         });
     });
 
+    // Home Launcher Handlers
+    if (btnOpenSender) {
+        btnOpenSender.addEventListener("click", () => {
+            const slug = (roomInput.value || "1").trim().replace(/[^a-zA-Z0-9_-]/g, "") || "1";
+            window.location.href = `/${slug}-s`;
+        });
+    }
+
+    if (btnOpenReceiver) {
+        btnOpenReceiver.addEventListener("click", () => {
+            const slug = (roomInput.value || "1").trim().replace(/[^a-zA-Z0-9_-]/g, "") || "1";
+            window.location.href = `/${slug}-r`;
+        });
+    }
+
+    if (roomInput) {
+        roomInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") {
+                const slug = (roomInput.value || "1").trim().replace(/[^a-zA-Z0-9_-]/g, "") || "1";
+                window.location.href = `/${slug}-s`;
+            }
+        });
+    }
+
+    // Lắng nghe chuyển trang nội bộ
+    window.addEventListener("hashchange", detectRoleAndSlug);
+    window.addEventListener("popstate", detectRoleAndSlug);
+
     // KHỞI CHẠY
     detectRoleAndSlug();
-    updateCheatCode();
-    connectSSE();
 })();

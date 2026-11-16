@@ -141,7 +141,7 @@ func main() {
 		if isCLI(r) {
 			http.Redirect(w, r, "/1-r", http.StatusFound)
 		} else {
-			http.Redirect(w, r, "/1-s", http.StatusFound)
+			serveIndexHTML(w, r)
 		}
 	})
 

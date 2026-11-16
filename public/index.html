@@ -11,10 +11,10 @@
         <!-- HEADER -->
         <header class="app-header">
             <div class="header-left">
-                <div class="logo">
+                <a href="/#" class="logo" id="logoLink" title="Về trang chủ hướng dẫn">
                     <span class="logo-icon">⚡</span>
                     <span class="logo-text">WireDrop</span>
-                </div>
+                </a>
                 <div class="wire-badge" id="wireBadge">
                     <span class="badge-role" id="badgeRole">SENDER</span>
                     <span class="badge-slug" id="badgeSlug">/1-s</span>
@@ -23,7 +23,7 @@
 
             <div class="header-right">
                 <!-- Dây trạng thái 1-1 -->
-                <div class="wire-status-card">
+                <div class="wire-status-card" id="wireStatusCard">
                     <div class="status-item">
                         <span class="status-dot connected"></span>
                         <span class="status-label">Đầu Phát:</span>
@@ -39,6 +39,66 @@
                 </div>
             </div>
         </header>
+
+        <!-- HOME / GUIDE VIEW (Hiển thị khi truy cập / hoặc /#) -->
+        <main class="view-panel" id="homeView" style="display: none;">
+            <div class="home-hero">
+                <h1 class="hero-title">⚡ WireDrop</h1>
+                <p class="hero-subtitle">Sợi dây 2 đầu thuần 1 chiều nối Web sang Terminal & Máy Ảo</p>
+                <p class="hero-desc">Truyền lệnh shell, script dài hoặc file nhị phân tức thì mà không cần gõ tay, không cần tài khoản, tự hủy sau khi đọc.</p>
+            </div>
+
+            <!-- ROOM LAUNCHER BOX -->
+            <div class="room-launcher-card">
+                <div class="launcher-header">
+                    <span class="launcher-icon">🔌</span>
+                    <span class="launcher-title">BẮT ĐẦU CẮM SỢI DÂY</span>
+                </div>
+                <div class="launcher-form">
+                    <div class="input-group">
+                        <label for="roomInput">Mã phòng (Slug):</label>
+                        <div class="input-with-prefix">
+                            <span class="url-prefix">/</span>
+                            <input type="text" id="roomInput" value="1" placeholder="ví dụ: 1, setup, myvm" />
+                        </div>
+                    </div>
+                    <div class="launcher-buttons">
+                        <button id="btnOpenSender" class="btn btn-primary btn-large">⚡ Mở Đầu Phát (*-s)</button>
+                        <button id="btnOpenReceiver" class="btn btn-secondary btn-large">📥 Mở Đầu Nhận (*-r)</button>
+                    </div>
+                </div>
+                <div class="launcher-quick">
+                    <span>Vào nhanh:</span>
+                    <a href="/1-s" class="quick-link">/1-s (Đầu Phát)</a>
+                    <span class="sep">•</span>
+                    <a href="/1-r" class="quick-link">/1-r (Đầu Nhận)</a>
+                </div>
+            </div>
+
+            <!-- 3-STEP QUICK GUIDE -->
+            <div class="home-guide-grid">
+                <div class="guide-step-card">
+                    <div class="step-badge">BƯỚC 1</div>
+                    <h3>Máy A (Bên Phát)</h3>
+                    <p>Mở trình duyệt vào <code>/:room-s</code> (ví dụ: <code>/1-s</code>). Soạn lệnh shell, kịch bản hoặc kéo thả 1 file nhị phân vào đường ống.</p>
+                </div>
+                <div class="guide-step-card">
+                    <div class="step-badge">BƯỚC 2</div>
+                    <h3>Máy B (Bên Nhận)</h3>
+                    <p>Trên console máy đích (VM / Linux / Windows), gõ 1 dòng duy nhất để hút dữ liệu về chạy:</p>
+                    <div class="step-code">
+                        <div><strong>Windows:</strong> <code>irm domain/1-r | iex</code></div>
+                        <div><strong>Linux:</strong> <code>curl -sL domain/1-r | sh</code></div>
+                        <div><strong>Tải file:</strong> <code>curl -sLJO domain/1-r</code></div>
+                    </div>
+                </div>
+                <div class="guide-step-card">
+                    <div class="step-badge">BƯỚC 3</div>
+                    <h3>Khóa 1-1 & Tự Hủy</h3>
+                    <p>Mỗi đầu dây chỉ nhận <strong>đúng 1 kết nối active</strong>. Khi Máy B nhận xong, dữ liệu <strong>tự hủy vĩnh viễn</strong> (Burn-After-Read), chống nghe lén tuyệt đối.</p>
+                </div>
+            </div>
+        </main>
 
         <!-- SENDER VIEW (Chỉ hiển thị khi URL là *-s) -->
         <main class="view-panel" id="senderView">
@@ -127,10 +187,6 @@ Write-Host 'Hello from WireDrop'
                         <a id="btnDownloadFile" class="btn btn-primary btn-large" href="#" download>💾 Tải File Về Máy</a>
                     </div>
                 </div>
-            </div>
-
-            <div class="reverse-note">
-                💡 <strong>Bạn muốn truyền file/kết quả ngược lại cho Máy A?</strong> Hãy mở một phòng phát mới (ví dụ: <a href="/2-s" target="_blank">/2-s</a>), bạn sẽ là người phát và Máy A sẽ cắm vào <a href="/2-r" target="_blank">/2-r</a> để nhận.
             </div>
         </main>
 
