@@ -423,7 +423,21 @@ func handleRoomEvents(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		room.RLock()
+		respData := map[string]interface{}{
+			"status":          "ok",
+			"slug":            room.Slug,
+			"sender_paired":   room.SenderConn != nil,
+			"receiver_paired": room.ReceiverConn != nil,
+			"paired":          room.ReceiverConn != nil,
+			"burn":            room.BurnAfterRead,
+			"slot_type":       room.Slot.Type,
+			"slot_text":       room.Slot.TextData,
+			"slot_file_name":  room.Slot.FileName,
+			"slot_file_size":  room.Slot.FileSize,
+		}
+		room.RUnlock()
+		_ = json.NewEncoder(w).Encode(respData)
 		return
 	}
 
@@ -460,11 +474,11 @@ func handleRoomEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache, no-transform")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
-	w.Header().Set("Content-Encoding", "none")
+	w.Header().Set("Content-Encoding", "identity")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
-	// Gửi ngay 2KB padding để phá bộ đệm của Cloudflare Edge tức thì
-	_, _ = fmt.Fprintf(w, ": %s\n\n", strings.Repeat(" ", 2048))
+	// Gửi ngay 4KB padding để phá bộ đệm của Cloudflare Edge tức thì
+	_, _ = fmt.Fprintf(w, ": %s\n\n", strings.Repeat(" ", 4096))
 	flusher.Flush()
 
 	sseChan := room.SubscribeSSE()

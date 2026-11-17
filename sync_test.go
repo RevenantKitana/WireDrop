@@ -96,19 +96,22 @@ func TestSSEHeadersAndBufferingPadding(t *testing.T) {
 	if xab := resp.Header.Get("X-Accel-Buffering"); xab != "no" {
 		t.Errorf("Kỳ vọng X-Accel-Buffering: no, nhận: %s", xab)
 	}
+	if ce := resp.Header.Get("Content-Encoding"); ce != "identity" {
+		t.Errorf("Kỳ vọng Content-Encoding: identity, nhận: %s", ce)
+	}
 	if ct := resp.Header.Get("Content-Type"); !strings.Contains(ct, "text/event-stream") {
 		t.Errorf("Kỳ vọng Content-Type text/event-stream, nhận: %s", ct)
 	}
 
-	// Đọc chunk đầu tiên: phải có 2KB padding để phá đệm
+	// Đọc chunk đầu tiên: phải có 4KB padding để phá đệm Cloudflare
 	reader := bufio.NewReader(resp.Body)
 	paddingLine, err := reader.ReadString('\n')
 	if err != nil {
 		t.Fatalf("Không thể đọc dòng đệm padding: %v", err)
 	}
 
-	if !strings.HasPrefix(paddingLine, ": ") || len(paddingLine) < 2000 {
-		t.Errorf("Kỳ vọng dòng padding dài >= 2000 bytes, nhận: %d bytes", len(paddingLine))
+	if !strings.HasPrefix(paddingLine, ": ") || len(paddingLine) < 4000 {
+		t.Errorf("Kỳ vọng dòng padding dài >= 4000 bytes, nhận: %d bytes", len(paddingLine))
 	}
 }
 
@@ -253,5 +256,47 @@ func TestForceReacquire(t *testing.T) {
 	defer forceSSEResp.Body.Close()
 	if forceSSEResp.StatusCode != http.StatusOK {
 		t.Errorf("Kỳ vọng 200 OK khi force SSE, nhận %d", forceSSEResp.StatusCode)
+	}
+}
+
+func TestCheckReturnsRoomSnapshot(t *testing.T) {
+	handler := createHandler()
+	ts := httptest.NewServer(handler)
+	defer ts.Close()
+
+	// 1. Sender nạp text vào phòng 'snaptest'
+	postReq, _ := http.NewRequest("POST", ts.URL+"/snaptest-s?conn=snap_tx", strings.NewReader("secret_token_123"))
+	postReq.Header.Set("Content-Type", "text/plain; charset=utf-8")
+	postResp, err := http.DefaultClient.Do(postReq)
+	if err != nil || postResp.StatusCode != http.StatusOK {
+		t.Fatalf("Lỗi POST ban đầu: %v", err)
+	}
+	postResp.Body.Close()
+
+	// 2. Receiver pre-check GET /snaptest/events?role=receiver&conn=snap_rx&check=1
+	checkReq, _ := http.NewRequest("GET", ts.URL+"/snaptest/events?role=receiver&conn=snap_rx&check=1", nil)
+	checkResp, err := http.DefaultClient.Do(checkReq)
+	if err != nil {
+		t.Fatalf("Lỗi check request: %v", err)
+	}
+	defer checkResp.Body.Close()
+
+	if checkResp.StatusCode != http.StatusOK {
+		t.Fatalf("Kỳ vọng 200 OK từ check, nhận: %d", checkResp.StatusCode)
+	}
+
+	var data map[string]interface{}
+	if err := json.NewDecoder(checkResp.Body).Decode(&data); err != nil {
+		t.Fatalf("Lỗi parse JSON: %v", err)
+	}
+
+	if data["status"] != "ok" {
+		t.Errorf("Kỳ vọng status ok, nhận: %v", data["status"])
+	}
+	if data["slot_text"] != "secret_token_123" {
+		t.Errorf("Kỳ vọng slot_text 'secret_token_123', nhận: %v", data["slot_text"])
+	}
+	if int(data["slot_type"].(float64)) != 1 {
+		t.Errorf("Kỳ vọng slot_type 1 (text), nhận: %v", data["slot_type"])
 	}
 }

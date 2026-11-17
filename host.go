@@ -444,6 +444,19 @@ func runTunnelFlow(exeDir string, cfg EnvConfig, isQuick bool) {
 			select {
 			case url := <-tunnelURLChan:
 				activeURL = url
+				// Kiem tra Cloudflare Edge warmup de tranh DNS propagation lag
+				warmupClient := &http.Client{Timeout: 2 * time.Second}
+				for retry := 0; retry < 12; retry++ {
+					resp, err := warmupClient.Get(activeURL + "/health")
+					if err == nil && resp.StatusCode == http.StatusOK {
+						_ = resp.Body.Close()
+						break
+					}
+					if resp != nil {
+						_ = resp.Body.Close()
+					}
+					time.Sleep(500 * time.Millisecond)
+				}
 				fmt.Println(" [XONG]")
 				break loopQuick
 			case <-dotTicker.C:

@@ -10,7 +10,7 @@
         return res;
     }
     const defaultSlug = generateSlug(4);
-    let slug = defaultSlug, isSender = true, isHome = false, os = "linux", sse = null, saveTimer = null, typing = false;
+    let slug = defaultSlug, isSender = true, isHome = false, os = "linux", sse = null, saveTimer = null, typing = false, pollTimer = null;
 
     // Quản lý mã kết nối vật lý (Physical Connection ID) lưu theo phiên phòng/vai trò để F5 không bị khóa 409
     function getConnId() {
@@ -88,9 +88,36 @@
             if (res.status === 409) return res.json().then(d => showLockout(d.message));
             if (res.ok) {
                 $("lockoutModal").style.display = "none";
+                res.json().then(d => {
+                    setPairStatus(!!d.receiver_paired, !!d.sender_paired);
+                    renderPayload(d);
+                });
                 startSSE(role, cid, force);
+                startPolling(role, cid);
             }
-        }).catch(() => startSSE(role, cid, force));
+        }).catch(() => {
+            startSSE(role, cid, force);
+            startPolling(role, cid);
+        });
+    }
+
+    function startPolling(role, cid) {
+        if (pollTimer) clearInterval(pollTimer);
+        pollTimer = setInterval(() => {
+            if (isHome) return;
+            fetch(`/${slug}/events?role=${role}&conn=${cid}&check=1`).then(res => {
+                if (res.ok) {
+                    res.json().then(d => {
+                        setPairStatus(!!d.receiver_paired, !!d.sender_paired);
+                        if (!isSender || !typing) {
+                            renderPayload(d);
+                        }
+                    });
+                } else if (res.status === 409) {
+                    res.json().then(d => showLockout(d.message));
+                }
+            }).catch(() => {});
+        }, 3000);
     }
 
     function startSSE(role, cid, force = false) {
@@ -278,6 +305,7 @@
             if (!$("roomInput").value) $("roomInput").value = defaultSlug;
             updateHomeQuickLinks($("roomInput").value || defaultSlug);
             if (sse) { sse.close(); sse = null; }
+            if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
             return;
         }
         isHome = false;

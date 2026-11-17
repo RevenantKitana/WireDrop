@@ -9,7 +9,8 @@ Mọi file được đặt tên theo quy chuẩn: `NN-v0.X.Y-<slug>.md` để đ
 ## Danh Sách Changelog Theo Các Giai Đoạn Phát Triển:
 
 ### 🌐 Giai Đoạn 5: FastHost CLI, Windows Portable & Tự Động Hóa Cloudflare Tunnel (v0.5.x)
-* [19-v0.5.3 - Khắc phục nghẽn đệm Cloudflare SSE Buffering & Đồng bộ hóa thời gian thực 2 đầu](19-v0.5.3-fix-cloudtunnel-sse-matching.md) - *(2026-11-17)* 🚀 **Mới nhất (State hiện tại)**
+* [20-v0.5.4 - Fix Cloudflare Quick Tunnel SSE Buffering & Hybrid Snapshot Sync](20-v0.5.4-fix-sse-buffering-hybrid-sync.md) - *(2026-11-17)* 🚀 **Mới nhất (State hiện tại)**
+* [19-v0.5.3 - Khắc phục nghẽn đệm Cloudflare SSE Buffering & Đồng bộ hóa thời gian thực 2 đầu](19-v0.5.3-fix-cloudtunnel-sse-matching.md) - *(2026-11-17)*
 * [18-v0.5.2 - Đóng gói Native Go Portable Windows All-in-One & Phân tách thư mục dist/](18-v0.5.2-native-portable-windows-dist.md) - *(2026-11-17)*
 * [17-v0.5.1 - Tinh chỉnh UX Console FastHost & Backend: Link Trang chủ # và chú thích Phòng mẫu ví dụ](17-v0.5.1-fasthost-ux-hub-link-clean-sample.md) - *(2026-11-17)*
 * [16-v0.5.0 - Bổ sung công cụ FastHost CLI tự động hóa Cloudflare Tunnel Cross-Platform](16-v0.5.0-fasthost-cli-tunnel.md) - *(2026-11-17)*
