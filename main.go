@@ -41,7 +41,7 @@ func init() {
 	}
 }
 
-// serveIndexHTML phục vụ file index.html cho Web UI
+// serveIndexHTML phục vụ file index.html cho Web UI với no-cache header
 func serveIndexHTML(w http.ResponseWriter, r *http.Request) {
 	data, err := fs.ReadFile(publicFS, "index.html")
 	if err != nil {
@@ -49,6 +49,37 @@ func serveIndexHTML(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+	_, _ = w.Write(data)
+}
+
+// serveStyleCSS phục vụ style.css với Content-Type chuẩn text/css và no-cache header (chống lỗi Render MIME/cache)
+func serveStyleCSS(w http.ResponseWriter, r *http.Request) {
+	data, err := fs.ReadFile(publicFS, "style.css")
+	if err != nil {
+		http.Error(w, "style.css not found in binary", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "text/css; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+	_, _ = w.Write(data)
+}
+
+// serveAppJS phục vụ app.js với Content-Type chuẩn javascript và no-cache header
+func serveAppJS(w http.ResponseWriter, r *http.Request) {
+	data, err := fs.ReadFile(publicFS, "app.js")
+	if err != nil {
+		http.Error(w, "app.js not found in binary", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
 	_, _ = w.Write(data)
 }
 
@@ -99,8 +130,12 @@ func roomDispatcher(w http.ResponseWriter, r *http.Request) {
 	room := r.PathValue("room")
 
 	// Phục vụ file tĩnh nếu bị lọt
-	if room == "style.css" || room == "app.js" {
-		http.FileServerFS(publicFS).ServeHTTP(w, r)
+	if room == "style.css" {
+		serveStyleCSS(w, r)
+		return
+	}
+	if room == "app.js" {
+		serveAppJS(w, r)
 		return
 	}
 	if room == "favicon.ico" {
@@ -131,9 +166,9 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	// 1. Phục vụ tĩnh
-	mux.Handle("GET /style.css", http.FileServerFS(publicFS))
-	mux.Handle("GET /app.js", http.FileServerFS(publicFS))
+	// 1. Phục vụ tĩnh với Content-Type chuẩn và No-Cache Header
+	mux.HandleFunc("GET /style.css", serveStyleCSS)
+	mux.HandleFunc("GET /app.js", serveAppJS)
 	mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
