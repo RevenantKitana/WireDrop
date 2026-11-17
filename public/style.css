@@ -15,9 +15,10 @@ body {
 }
 
 .wrap {
-    max-width: 900px;
+    width: 92%; /* Cố định bằng % mở rộng không gian đọc hiểu text */
+    max-width: 1400px;
     margin: 0 auto;
-    padding: 18px;
+    padding: 18px 0;
     display: flex;
     flex-direction: column;
     min-height: 100vh;
@@ -127,7 +128,7 @@ button, .btn-black, .btn-white {
 .payload-frame {
     border: 1px solid #000;
     background: #fff;
-    height: 280px; /* Khóa cố định chiều cao tuyệt đối */
+    height: 320px; /* Cố định chiều cao tương xứng với bề ngang rộng */
     width: 100%;
     position: relative;
     overflow: hidden;
