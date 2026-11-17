@@ -96,7 +96,14 @@ button, .btn-black, .btn-white {
 .btn-white:hover { background: #eee; }
 
 /* WORKSPACE & MODE BAR */
+main, #homeView, #senderView, #receiverView {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
 .workspace {
+    width: 100%;
     display: flex;
     flex-direction: column;
     gap: 12px;
