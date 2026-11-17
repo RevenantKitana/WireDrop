@@ -130,7 +130,7 @@
         setTimeout(() => toast.classList.remove("show"), 1800);
     }
 
-    function copyText(text, successMsg = "Đã copy ✓") {
+    function copyText(text, successMsg = "[ ĐÃ COPY ✓ ]") {
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(text).then(() => showToast(successMsg));
         } else {
@@ -171,8 +171,8 @@
 
     // Hiển thị màn hình khóa khi bị 409 Line Busy
     function showLockout(msg) {
-        lockoutTitle.textContent = isSender ? "TX ĐANG BẬN" : "RX ĐANG BẬN";
-        lockoutMsg.textContent = msg || "Đầu dây này đang có một kết nối khác chiếm giữ. WireDrop chỉ cho phép đúng 1 kết nối tại một thời điểm.";
+        lockoutTitle.textContent = isSender ? "TX ĐANG BẬN [409]" : "RX ĐANG BẬN [409]";
+        lockoutMsg.textContent = msg || "Đầu dây này đang có một kết nối khác chiếm giữ. WireDrop duy trì khóa vật lý 1-1 độc quyền.";
         lockoutModal.style.display = "flex";
     }
 
@@ -226,7 +226,7 @@
                 nodeReceiver.title = "RX đã kết nối";
             }
             if (isSender && btnUnpair) btnUnpair.style.display = "inline-flex";
-            showToast("RX đã kết nối ✓");
+            showToast("[ RX ĐÃ KẾT NỐI ✓ ]");
         });
 
         eventSource.addEventListener("partner_unpaired", () => {
@@ -258,7 +258,7 @@
         eventSource.addEventListener("payload_cleared", () => {
             if (!isSender) {
                 showRecvEmpty();
-                showToast("Dữ liệu đã tự hủy ✓");
+                showToast("[ DỮ LIỆU ĐÃ TỰ HỦY ✓ ]");
             }
         });
 
@@ -359,7 +359,7 @@
     function showRecvEmpty() {
         recvTextSection.style.display = "block";
         recvFileSection.style.display = "none";
-        recvTextDisplay.querySelector("code").textContent = "# Đang chờ dữ liệu...";
+        recvTextDisplay.querySelector("code").textContent = "# [RX_STREAM: ĐANG CHỜ DỮ LIỆU TỪ TX...]";
     }
 
     function formatSize(bytes) {
@@ -371,7 +371,7 @@
     // Auto-save Text
     function autoSaveText() {
         if (!isSender || isHome) return;
-        syncIndicator.textContent = "Lưu...";
+        syncIndicator.textContent = "[ĐANG LƯU...]";
         isLocalTyping = true;
 
         clearTimeout(saveTimeout);
@@ -384,16 +384,16 @@
             })
             .then(res => {
                 if (res.ok) {
-                    syncIndicator.textContent = "Đã lưu ✓";
+                    syncIndicator.textContent = "[ĐÃ LƯU ✓]";
                 } else if (res.status === 409) {
-                    syncIndicator.textContent = "Bị khóa!";
+                    syncIndicator.textContent = "[BỊ KHÓA !]";
                     showLockout("TX đang bị kết nối khác chiếm giữ.");
                 } else {
-                    syncIndicator.textContent = "Lỗi lưu!";
+                    syncIndicator.textContent = "[LỖI LƯU !]";
                 }
             })
             .catch(() => {
-                syncIndicator.textContent = "Mất mạng!";
+                syncIndicator.textContent = "[MẤT MẠNG !]";
             })
             .finally(() => {
                 setTimeout(() => { isLocalTyping = false; }, 300);
@@ -408,7 +408,7 @@
         const formData = new FormData();
         formData.append("file", file);
 
-        syncIndicator.textContent = "Đang nạp file...";
+        syncIndicator.textContent = "[NẠP FILE...]";
         fetch(`/${currentSlug}-s?conn=${connId}`, {
             method: "POST",
             body: formData
@@ -422,12 +422,12 @@
         })
         .then(data => {
             showActiveFile(data.name, data.size);
-            syncIndicator.textContent = "Đã nạp ✓";
-            showToast(`Đã nạp ${data.name} ✓`);
+            syncIndicator.textContent = "[ĐÃ NẠP ✓]";
+            showToast(`[ ĐÃ NẠP ${data.name} ✓ ]`);
         })
         .catch(err => {
             if (err.message !== "409") {
-                syncIndicator.textContent = "Lỗi upload!";
+                syncIndicator.textContent = "[LỖI UPLOAD !]";
             }
         });
     }
@@ -474,12 +474,12 @@
         if (e.dataTransfer.files.length > 0) uploadSingleFile(e.dataTransfer.files[0]);
     });
 
-    btnCopyCheat.addEventListener("click", () => copyText(cheatCode.textContent, "Đã copy lệnh ✓"));
+    btnCopyCheat.addEventListener("click", () => copyText(cheatCode.textContent, "[ ĐÃ COPY LỆNH ✓ ]"));
 
     if (btnCopyRecvText) {
         btnCopyRecvText.addEventListener("click", () => {
             const code = recvTextDisplay.querySelector("code").textContent;
-            copyText(code, "Đã copy nội dung ✓");
+            copyText(code, "[ ĐÃ COPY NỘI DUNG ✓ ]");
         });
     }
 
@@ -487,7 +487,7 @@
     btnUnpair.addEventListener("click", () => {
         if (confirm("Mở khóa RX để cho kết nối khác cắm vào?")) {
             fetch(`/${currentSlug}/reset-receiver`, { method: "POST" })
-                .then(() => showToast("Đã mở khóa RX"));
+                .then(() => showToast("[ ĐÃ MỞ KHÓA RX ]"));
         }
     });
 
