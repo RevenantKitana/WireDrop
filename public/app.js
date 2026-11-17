@@ -109,8 +109,16 @@
                 if (res.ok) {
                     res.json().then(d => {
                         setPairStatus(!!d.receiver_paired, !!d.sender_paired);
-                        if (!isSender || !typing) {
+                        if (!isSender) {
                             renderPayload(d);
+                        } else {
+                            if (d.slot_type === 2 && $("activeFileName").textContent !== d.slot_file_name) {
+                                showActiveFile(d.slot_file_name, d.slot_file_size);
+                            } else if (d.slot_type === 1 && !$("btnModeFile").classList.contains("active") && !typing) {
+                                if ($("senderTextarea").value !== (d.slot_text || "")) {
+                                    $("senderTextarea").value = d.slot_text || "";
+                                }
+                            }
                         }
                     });
                 } else if (res.status === 409) {
@@ -183,10 +191,10 @@
         if (isSender) {
             if (d.slot_type === 2) {
                 showActiveFile(d.slot_file_name, d.slot_file_size);
-            } else if (location.search.includes("mode=file") || location.hash === "#file") {
+            } else if ($("btnModeFile").classList.contains("active") || location.search.includes("mode=file") || location.hash === "#file") {
                 showFileDropzone();
             } else {
-                if (!typing) $("senderTextarea").value = d.slot_text || "";
+                if (!typing && d.slot_text !== undefined) $("senderTextarea").value = d.slot_text || "";
                 showTextEditor();
             }
         } else {
@@ -339,9 +347,14 @@
     }
 
     // Event Listeners
-    $("btnModeText").onclick = () => { showTextEditor(); autoSave(); };
+    $("btnModeText").onclick = () => {
+        showTextEditor();
+        if (location.hash === "#file") history.replaceState(null, "", location.pathname + location.search);
+        autoSave();
+    };
     $("btnModeFile").onclick = () => {
         showFileDropzone();
+        history.replaceState(null, "", location.pathname + location.search + "#file");
         if ($("activeFileName").textContent && $("activeFileName").textContent !== "-") {
             $("dropzoneBox").style.display = "none";
             $("fileActiveCard").style.display = "flex";
@@ -354,6 +367,7 @@
         $("activeFileName").textContent = "-";
         $("dropzoneBox").style.display = "flex";
         $("fileActiveCard").style.display = "none";
+        if (location.hash === "#file") history.replaceState(null, "", location.pathname + location.search);
         showTextEditor();
         autoSave();
     };
