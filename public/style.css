@@ -1,6 +1,6 @@
 /* ==========================================================================
    WireDrop - Balanced Minimalist Monochrome Layout
-   Clean 2-Column Grid • Zero Radius • Proportional Card Density
+   Clean 2-Column Grid • Zero Radius • Locked Proportions (Zero Jitter)
    ========================================================================== */
 
 * { box-sizing: border-box; margin: 0; padding: 0; border-radius: 0 !important; }
@@ -102,6 +102,8 @@ button, .btn-black, .btn-white {
     color: #000;
     padding: 6px 16px;
     font-weight: bold;
+    min-width: 96px;
+    text-align: center;
 }
 .mode-btn.active {
     background: #000;
@@ -113,13 +115,14 @@ button, .btn-black, .btn-white {
     margin-left: 6px;
 }
 
-/* DUAL-PANE CORE GRID */
+/* DUAL-PANE CORE GRID - CỐ ĐỊNH KÍCH THƯỚC TUYỆT ĐỐI */
 .dual-box {
     border: 1px solid #000;
     background: #fff;
     display: grid;
     grid-template-columns: 1fr 1fr;
-    min-height: 360px;
+    height: 380px; /* Khóa cố định chiều cao - Triệt tiêu 100% sự biến thiên */
+    overflow: hidden;
 }
 
 /* LEFT COLUMN */
@@ -128,17 +131,20 @@ button, .btn-black, .btn-white {
     display: flex;
     flex-direction: column;
     background: #fff;
+    height: 100%;
+    overflow: hidden;
 }
 
 /* 1. TEXT MODE EDITOR */
 .editor-pane {
     flex: 1;
     display: flex;
+    height: 100%;
 }
 #senderTextarea {
     flex: 1;
     width: 100%;
-    min-height: 340px;
+    height: 100%;
     border: none;
     padding: 14px;
     font: inherit;
@@ -150,19 +156,20 @@ button, .btn-black, .btn-white {
     overflow-y: auto;
 }
 
-/* 2. FILE MODE - CÂN ĐỐI TỶ LỆ DIỆN TÍCH THẺ */
+/* 2. FILE MODE - ĐỒNG NHẤT KHUÔN KHỔ 100% */
 .dropzone-pane {
     flex: 1;
-    padding: 16px;
+    padding: 14px;
     display: flex;
     flex-direction: column;
+    height: 100%;
+    box-sizing: border-box;
 }
 .dropzone-box {
     flex: 1;
     height: 100%;
-    min-height: 280px;
     border: 1px dashed #000;
-    padding: 32px 20px;
+    padding: 24px 18px;
     text-align: center;
     cursor: pointer;
     background: #fafafa;
@@ -170,43 +177,45 @@ button, .btn-black, .btn-white {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: 8px;
     transition: background 0.15s ease;
+    box-sizing: border-box;
 }
 .dropzone-box:hover, .dropzone-box.dragover { background: #eee; }
-.drop-icon { font-size: 24px; font-weight: bold; }
+.drop-icon { font-size: 22px; font-weight: bold; }
 .drop-title { font-size: 13px; }
 .drop-sub { font-size: 12px; color: #555; }
 .drop-hint {
     font-size: 11px;
     color: #777;
-    margin-top: 8px;
+    margin-top: 6px;
     border-top: 1px dashed #ccc;
-    padding-top: 8px;
-    width: 80%;
+    padding-top: 6px;
+    width: 85%;
 }
 
 .file-loaded-card {
     flex: 1;
     height: 100%;
     border: 1px solid #000;
-    padding: 18px;
+    padding: 16px;
     background: #fafafa;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+    box-sizing: border-box;
 }
 .file-card-tag {
     font-size: 11px;
     font-weight: bold;
     color: #000;
     border-bottom: 1px solid #000;
-    padding-bottom: 8px;
+    padding-bottom: 6px;
 }
 .file-card-body {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
     font-size: 12px;
     margin: auto 0;
 }
@@ -215,23 +224,25 @@ button, .btn-black, .btn-white {
     align-items: baseline;
     gap: 10px;
 }
-.meta-label { color: #666; min-width: 90px; }
+.meta-label { color: #666; min-width: 80px; }
 .meta-desc { color: #333; line-height: 1.4; }
 .file-card-footer {
     display: flex;
     justify-content: flex-end;
     border-top: 1px dashed #ccc;
-    padding-top: 10px;
+    padding-top: 8px;
 }
 
 /* RIGHT COLUMN */
 .pane-right {
-    padding: 18px;
+    padding: 16px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
     background: #fff;
-    gap: 16px;
+    height: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 .rx-header-row {
     display: flex;
@@ -251,13 +262,14 @@ button, .btn-black, .btn-white {
 /* RX COMMAND CARD (GỌN GÀNG, ĐIỂM NHẤN RÕ RÀNG) */
 .rx-cmd-card {
     border: 1px solid #000;
-    padding: 16px;
+    padding: 14px;
     background: #fafafa;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
     flex: 1;
     justify-content: center;
+    margin: 10px 0;
 }
 .cmd-label {
     font-size: 11px;
@@ -266,7 +278,7 @@ button, .btn-black, .btn-white {
 .cmd-code-wrapper {
     background: #fff;
     border: 1px solid #ccc;
-    padding: 10px 12px;
+    padding: 8px 10px;
     word-break: break-all;
 }
 .cmd-code-wrapper code {
@@ -291,11 +303,12 @@ button, .btn-black, .btn-white {
     display: flex;
     flex-direction: column;
     padding: 14px;
+    height: 100%;
+    overflow: hidden;
 }
 .recv-pane pre {
     flex: 1;
-    min-height: 320px;
-    max-height: 480px;
+    height: 100%;
     overflow-y: auto;
     white-space: pre-wrap;
     word-break: break-all;
@@ -327,6 +340,7 @@ button, .btn-black, .btn-white {
     flex-direction: column;
     justify-content: space-between;
     gap: 16px;
+    height: 100%;
 }
 .home-brand h2 { font-size: 18px; letter-spacing: 1px; }
 .brand-sub { font-size: 12px; font-weight: bold; margin-top: 2px; }
@@ -356,6 +370,8 @@ button, .btn-black, .btn-white {
 .home-guide-pane {
     padding: 20px;
     gap: 12px;
+    height: 100%;
+    justify-content: space-between;
 }
 .guide-steps {
     display: flex;
@@ -401,6 +417,16 @@ button, .btn-black, .btn-white {
 
 /* RESPONSIVE */
 @media (max-width: 720px) {
-    .dual-box { grid-template-columns: 1fr; }
-    .pane-left { border-right: none; border-bottom: 1px solid #000; }
+    .dual-box {
+        grid-template-columns: 1fr;
+        height: auto;
+    }
+    .pane-left {
+        border-right: none;
+        border-bottom: 1px solid #000;
+        height: 280px;
+    }
+    .pane-right {
+        height: auto;
+    }
 }
