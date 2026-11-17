@@ -47,19 +47,28 @@
 
                 <!-- HƯỚNG DẪN 3 BƯỚC CỐ ĐỊNH PHÍA DƯỚI -->
                 <div class="rx-fixed-bar home-guide-bar">
-                    <span class="rx-title">HƯỚNG DẪN 3 BƯỚC:</span>
+                    <span class="rx-title">HƯỚNG DẪN SỬ DỤNG:</span>
                     <div class="home-guide-grid">
                         <div class="guide-col">
-                            <strong>[1. TX: PHÁT]</strong>
-                            <p>Mở <code>/:room-s</code>, dán kịch bản shell hoặc nạp 1 file.</p>
+                            <strong>[1. BÊN PHÁT (TX)]</strong>
+                            <p>Khởi tạo bàn phát:</p>
+                            <p>Nhập slug và bấm <strong>TX (PHÁT)</strong> mở giao diện gửi.</p>
+                            <p style="margin-top: 4px;">Nạp nội dung:</p>
+                            <p>Dán script lệnh hoặc kéo thả 1 file vào khung soạn thảo.</p>
                         </div>
                         <div class="guide-col">
-                            <strong>[2. RX: NHẬN]</strong>
-                            <p>1 dòng Terminal: <code>curl -sL domain/1-r | sh</code> (Win: <code>irm ... | iex</code>)</p>
+                            <strong>[2. THỰC THI LỆNH (RX)]</strong>
+                            <p>Linux / macOS:</p>
+                            <code class="rx-cmd" id="homeGuideLinux">curl -sL host/:room-r | sh</code>
+                            <p>Windows PowerShell:</p>
+                            <code class="rx-cmd" id="homeGuideWin">irm host/:room-r | iex</code>
                         </div>
                         <div class="guide-col">
-                            <strong>[3. AN TOÀN]</strong>
-                            <p>Đúng 1 kết nối mỗi đầu. Đọc xong xóa trắng khỏi RAM.</p>
+                            <strong>[3. NHẬN FILE (RX)]</strong>
+                            <p>Terminal (lưu đúng tên file gốc):</p>
+                            <code class="rx-cmd" id="homeGuideFile">curl -sLJO host/:room-r</code>
+                            <p>Trình duyệt Web:</p>
+                            <p>Bấm <strong>RX (NHẬN)</strong> để xem trực tiếp hoặc tải file về.</p>
                         </div>
                     </div>
                 </div>

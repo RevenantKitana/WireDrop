@@ -202,6 +202,10 @@
         const tx = $("quickTxLink"), rx = $("quickRxLink");
         if (tx) { tx.href = `/${s}-s`; tx.textContent = `/${s}-s (TX)`; }
         if (rx) { rx.href = `/${s}-r`; rx.textContent = `/${s}-r (RX)`; }
+        const url = `${location.origin}/${s}-r`;
+        const gl = $("homeGuideLinux"); if (gl) gl.textContent = `curl -sL ${url} | sh`;
+        const gw = $("homeGuideWin"); if (gw) gw.textContent = `irm ${url} | iex`;
+        const gf = $("homeGuideFile"); if (gf) gf.textContent = `curl -sLJO ${url}`;
     }
 
     function detectRole() {
