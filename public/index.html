@@ -8,93 +8,128 @@
 </head>
 <body>
     <div class="wrap">
-        <header>
-            <div>
-                <a href="/#" id="logoLink"><strong>WIREDROP</strong></a>
-                <span id="wireBadge" style="display:none;"><span id="badgeRole">TX</span> <span id="badgeSlug">/1-s</span></span>
+        <!-- HEADER -->
+        <header class="app-header">
+            <div class="header-left">
+                <a href="/#" id="logoLink" class="logo">WIREDROP</a>
+                <span id="wireBadge" class="wire-badge" style="display:none;">
+                    <span id="badgeRole">TX</span> <span id="badgeSlug">/1-s</span>
+                </span>
             </div>
-            <div id="wireStatusCard" style="display:none;">
-                <span id="nodeSender">TX ●</span> ─── <span id="nodeReceiver">RX ○</span>
-                <button id="btnUnpair" style="display:none;" title="Ngắt RX">✕</button>
+            <div class="header-right" id="wireStatusCard" style="display:none;">
+                <span id="nodeSender">TX ●</span>──<span id="nodeReceiver">RX ○</span>
+                <button id="btnUnpair" class="btn-tiny" style="display:none;" title="Ngắt RX">✕</button>
             </div>
         </header>
+        <div class="header-divider"></div>
 
-        <!-- 1. HOME -->
+        <!-- 1. HOME VIEW (/ hoặc /#) -->
         <main id="homeView" style="display:none;">
-            <div class="box">
-                <h2>WIREDROP // WEB → TERMINAL RELAY</h2>
-                <p>Khóa vật lý 1-1 độc quyền • Tự hủy sau khi nhận (Burn-After-Read)</p>
-            </div>
-            <div class="box">
-                <label><strong>ĐẦU DÂY:</strong></label>
-                <div class="row">
-                    <span>/</span>
-                    <input id="roomInput" value="1" placeholder="slug" autofocus autocomplete="off" />
-                    <button id="btnOpenSender" class="btn-black">TX (PHÁT)</button>
-                    <button id="btnOpenReceiver">RX (NHẬN)</button>
+            <div class="home-card">
+                <div class="card-section">
+                    <h2>WIREDROP // WEB → TERMINAL RELAY</h2>
+                    <p>Khóa vật lý 1-1 độc quyền • Tự hủy sau khi nhận (Burn-After-Read)</p>
                 </div>
-                <small>Mặc định: <a href="/1-s">/1-s (TX)</a> | <a href="/1-r">/1-r (RX)</a></small>
-            </div>
-            <div class="box guide">
-                <div><strong>[1. TX]</strong> Soạn lệnh shell hoặc thả 1 file tại <code>/:room-s</code></div>
-                <div><strong>[2. RX]</strong> Windows: <code>irm domain/1-r | iex</code> | Linux: <code>curl -sL domain/1-r | sh</code></div>
-                <div><strong>[3. AN TOÀN]</strong> Đúng 1 kết nối mỗi đầu. Đọc xong tự hủy khỏi RAM.</div>
+                <div class="card-section">
+                    <label><strong>KẾT NỐI ĐẦU DÂY:</strong></label>
+                    <div class="launcher-row">
+                        <span class="url-slash">/</span>
+                        <input id="roomInput" value="1" placeholder="slug" autofocus autocomplete="off" />
+                        <button id="btnOpenSender" class="btn-black">TX (PHÁT)</button>
+                        <button id="btnOpenReceiver" class="btn-white">RX (NHẬN)</button>
+                    </div>
+                    <small class="quick-links">Mặc định: <a href="/1-s">/1-s (TX)</a> | <a href="/1-r">/1-r (RX)</a></small>
+                </div>
+                <div class="card-section guide-section">
+                    <div><strong>[1. TX]</strong> Soạn lệnh shell hoặc thả 1 file tại <code>/:room-s</code></div>
+                    <div><strong>[2. RX]</strong> Windows: <code>irm domain/1-r | iex</code> | Linux: <code>curl -sL domain/1-r | sh</code></div>
+                    <div><strong>[3. AN TOÀN]</strong> Đúng 1 kết nối mỗi đầu. Đọc xong tự hủy khỏi RAM.</div>
+                </div>
             </div>
         </main>
 
-        <!-- 2. SENDER (TX) -->
+        <!-- 2. SENDER VIEW (*-s) -->
         <main id="senderView" style="display:none;">
-            <div class="row bar">
-                <button id="btnModeText" class="active">VĂN BẢN</button>
-                <button id="btnModeFile">FILE</button>
-                <span id="syncIndicator">[ĐÃ LƯU ✓]</span>
-            </div>
-            <div id="editorContainer">
-                <textarea id="senderTextarea" spellcheck="false" placeholder="# Nhập lệnh shell, script..."></textarea>
-            </div>
-            <div id="fileDropzone" class="box" style="display:none;">
-                <div id="dropzoneBox">
-                    <p id="dropzoneText">[+] Kéo thả file hoặc click để chọn</p>
-                    <input type="file" id="singleFileInput" style="display:none;" />
+            <div class="workspace">
+                <!-- MODE BAR (VĂN BẢN | FILE | [ĐÃ LƯU ✓]) -->
+                <div class="mode-bar">
+                    <button id="btnModeText" class="mode-btn active">VĂN BẢN</button>
+                    <button id="btnModeFile" class="mode-btn">FILE</button>
+                    <span id="syncIndicator" class="sync-text">[ĐÃ LƯU ✓]</span>
                 </div>
-                <div id="fileActiveCard" class="row" style="display:none;">
-                    <span>[FILE] <strong id="activeFileName">-</strong> (<span id="activeFileSize">0 KB</span>)</span>
-                    <button id="btnRemoveFile">✕ HỦY</button>
-                </div>
-            </div>
-            <div class="box cheat">
-                <div class="row">
-                    <small>LỆNH RX:</small>
-                    <div>
-                        <button class="os-tab active" data-os="linux">LINUX</button>
-                        <button class="os-tab" data-os="win">WIN</button>
-                        <button class="os-tab" data-os="browser">URL</button>
+
+                <!-- DUAL-PANE BOX (CHUẨN BỐ CỤC DESIGN) -->
+                <div class="dual-box">
+                    <!-- CỘT TRÁI: TEXTAREA HOẶC DROPZONE -->
+                    <div class="pane-left">
+                        <div id="editorContainer" class="editor-pane">
+                            <textarea id="senderTextarea" spellcheck="false" placeholder="# Nhập lệnh shell,&#10;script..."></textarea>
+                        </div>
+                        <div id="fileDropzone" class="dropzone-pane" style="display:none;">
+                            <div id="dropzoneBox" class="dropzone-dashed">
+                                <p id="dropzoneText">[+] Kéo thả file hoặc click để chọn</p>
+                                <input type="file" id="singleFileInput" style="display:none;" />
+                            </div>
+                            <div id="fileActiveCard" class="file-active-row" style="display:none;">
+                                <div>[FILE] <strong id="activeFileName">-</strong> (<span id="activeFileSize">0 KB</span>)</div>
+                                <button id="btnRemoveFile" class="btn-white">✕ HỦY</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- CỘT PHẢI: LỆNH RX + OS TABS + COPY -->
+                    <div class="pane-right">
+                        <div class="rx-header-row">
+                            <span class="rx-title">LỆNH RX:</span>
+                            <div class="os-tabs">
+                                <button class="os-tab active" data-os="linux">LINUX</button>
+                                <button class="os-tab" data-os="win">WIN</button>
+                                <button class="os-tab" data-os="browser">URL</button>
+                            </div>
+                        </div>
+                        <div class="rx-cmd-area">
+                            <code id="cheatCode">curl -sL http://localhost:8080/1-r | sh</code>
+                        </div>
+                        <div class="rx-footer-row">
+                            <button id="btnCopyCheat" class="btn-black">COPY</button>
+                        </div>
                     </div>
                 </div>
-                <div class="row">
-                    <code id="cheatCode">curl -sL ...</code>
-                    <button id="btnCopyCheat" class="btn-black">COPY</button>
-                </div>
             </div>
         </main>
 
-        <!-- 3. RECEIVER (RX) -->
+        <!-- 3. RECEIVER VIEW (*-r) -->
         <main id="receiverView" style="display:none;">
-            <div id="recvTextSection" class="box">
-                <div class="row">
-                    <small>RX OUTPUT:</small>
-                    <button id="btnCopyRecvText" class="btn-black">COPY</button>
+            <div class="workspace">
+                <div class="dual-box">
+                    <div class="pane-left">
+                        <div id="recvTextSection" class="recv-pane">
+                            <pre id="recvTextDisplay"><code># Chờ dữ liệu từ TX...</code></pre>
+                        </div>
+                        <div id="recvFileSection" class="recv-pane file-recv" style="display:none;">
+                            <h3 id="recvFileName">-</h3>
+                            <p id="recvFileSize">0 KB</p>
+                            <a id="btnDownloadFile" class="btn-black" href="#" download>TẢI FILE</a>
+                        </div>
+                    </div>
+                    <div class="pane-right">
+                        <div class="rx-header-row">
+                            <span class="rx-title">DỮ LIỆU NHẬN (RX):</span>
+                        </div>
+                        <div class="rx-cmd-area">
+                            <p>Đầu dây đã cắm vào TX.</p>
+                            <small>// Dữ liệu tự hủy sau khi đọc (Burn-After-Read)</small>
+                        </div>
+                        <div class="rx-footer-row">
+                            <button id="btnCopyRecvText" class="btn-black">COPY</button>
+                        </div>
+                    </div>
                 </div>
-                <pre id="recvTextDisplay"><code># Chờ dữ liệu...</code></pre>
-            </div>
-            <div id="recvFileSection" class="box" style="display:none; text-align:center;">
-                <h3 id="recvFileName">-</h3>
-                <p id="recvFileSize">0 KB</p>
-                <a id="btnDownloadFile" class="btn-black" href="#" download>TẢI FILE</a>
             </div>
         </main>
 
-        <footer>
+        <!-- FOOTER -->
+        <footer class="app-footer">
             <small>WIREDROP • 1-1 PHYSICAL LOCK • <a href="/health" target="_blank">[HEALTH: OK]</a></small>
         </footer>
     </div>

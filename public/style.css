@@ -1,36 +1,109 @@
+/* ==========================================================================
+   WireDrop - Minimalist Monochrome 2-Column Layout
+   Design Source: WireDrop Physical Wire Mockup (Black on White)
+   ========================================================================== */
+
 * { box-sizing: border-box; margin: 0; padding: 0; border-radius: 0 !important; }
-body { font-family: 'JetBrains Mono', Consolas, monospace; background: #fff; color: #000; line-height: 1.5; font-size: 13px; }
-.wrap { max-width: 820px; margin: 0 auto; padding: 14px; display: flex; flex-direction: column; min-height: 100vh; gap: 14px; }
+body { font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace; background: #fff; color: #000; line-height: 1.5; font-size: 13px; }
 
-header, footer, .box, .bar, .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-header { border-bottom: 2px solid #000; padding-bottom: 8px; }
-footer { margin-top: auto; border-top: 1px solid #ccc; padding-top: 10px; color: #666; }
+.wrap { max-width: 900px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; min-height: 100vh; gap: 14px; }
 
-a { color: #000; text-decoration: underline; }
-a:hover { background: #000; color: #fff; text-decoration: none; }
+/* HEADER */
+.app-header { display: flex; align-items: center; justify-content: space-between; }
+.header-left, .header-right { display: flex; align-items: center; gap: 10px; }
+.logo { font-weight: bold; font-size: 14px; color: #000; text-decoration: underline; letter-spacing: 0.5px; }
+.logo:hover { background: #000; color: #fff; text-decoration: none; }
+.wire-badge { border: 1px solid #000; padding: 2px 8px; font-size: 12px; }
+.header-right { font-weight: bold; letter-spacing: 0.5px; }
+.btn-tiny { border: 1px solid #000; background: #fff; font-size: 10px; padding: 1px 4px; cursor: pointer; margin-left: 6px; }
+.header-divider { border-bottom: 2px solid #000; margin-top: 6px; margin-bottom: 8px; }
 
-button, .btn-black, a.btn-black {
-    border: 1px solid #000; background: #fff; color: #000; padding: 4px 10px;
-    font: inherit; font-size: 12px; cursor: pointer; text-decoration: none; display: inline-block;
+/* BUTTONS */
+button, .btn-black, .btn-white {
+    border: 1px solid #000; font: inherit; font-size: 12px; cursor: pointer; text-decoration: none; display: inline-block;
 }
-button:hover, .btn-black, .active { background: #000 !important; color: #fff !important; }
-button.active { font-weight: bold; }
+.btn-black { background: #000; color: #fff; padding: 6px 16px; font-weight: bold; }
+.btn-black:hover { background: #333; }
+.btn-white { background: #fff; color: #000; padding: 6px 14px; }
+.btn-white:hover { background: #eee; }
 
-.box { border: 1px solid #000; padding: 12px; flex-direction: column; align-items: stretch; background: #fafafa; }
-.guide { gap: 6px; font-size: 12px; }
-.cheat { background: #fff; gap: 10px; }
+/* WORKSPACE & MODE BAR */
+.workspace { display: flex; flex-direction: column; gap: 10px; }
+.mode-bar { display: flex; align-items: center; gap: 8px; }
+.mode-btn { background: #fff; color: #000; padding: 6px 16px; font-weight: bold; }
+.mode-btn.active { background: #000; color: #fff; }
+.sync-text { font-size: 12px; font-weight: bold; margin-left: 6px; }
 
-input, textarea { border: 1px solid #000; padding: 6px; font: inherit; background: #fff; outline: none; }
-input { flex: 1; }
-textarea { width: 100%; min-height: 280px; resize: vertical; display: block; }
-pre { background: #fff; border: 1px solid #000; padding: 10px; max-height: 480px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
-code { font-family: inherit; font-weight: bold; }
+/* DUAL-PANE BOX (CORE 2-COLUMN LAYOUT) */
+.dual-box {
+    border: 1px solid #000;
+    background: #fff;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    min-height: 340px;
+}
 
-#dropzoneBox { border: 1px dashed #000; padding: 28px; text-align: center; cursor: pointer; background: #fff; }
-#dropzoneBox.dragover { background: #eee; }
+/* LEFT COLUMN */
+.pane-left {
+    border-right: 1px solid #000;
+    display: flex;
+    flex-direction: column;
+}
+.editor-pane { flex: 1; display: flex; }
+#senderTextarea {
+    flex: 1; width: 100%; min-height: 320px; border: none; padding: 14px;
+    font: inherit; font-size: 13px; line-height: 1.5; outline: none; resize: vertical; background: #fff;
+}
+.dropzone-pane { flex: 1; padding: 16px; display: flex; flex-direction: column; }
+.dropzone-dashed {
+    flex: 1; min-height: 260px; border: 1px dashed #000; display: flex;
+    align-items: center; justify-content: center; text-align: center; cursor: pointer; padding: 20px;
+}
+.dropzone-dashed.dragover { background: #f0f0f0; }
+.file-active-row {
+    display: flex; justify-content: space-between; align-items: center;
+    border: 1px solid #000; padding: 12px; margin-top: 10px;
+}
 
-#wireBadge { border: 1px solid #000; padding: 1px 6px; font-size: 12px; margin-left: 6px; }
-#syncIndicator { font-size: 11px; margin-left: auto; font-weight: bold; }
+/* RIGHT COLUMN */
+.pane-right {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+.rx-header-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.rx-title { font-weight: bold; font-size: 13px; }
+.os-tabs { display: flex; gap: 4px; }
+.os-tab { padding: 4px 10px; }
+.os-tab.active { background: #000; color: #fff; font-weight: bold; }
+.rx-cmd-area { margin: 24px 0; word-break: break-all; }
+.rx-cmd-area code { font: inherit; font-weight: bold; font-size: 13px; line-height: 1.6; }
+.rx-footer-row { display: flex; justify-content: flex-end; }
+
+/* RECEIVER VIEW */
+.recv-pane { flex: 1; display: flex; flex-direction: column; padding: 14px; }
+.recv-pane pre {
+    flex: 1; min-height: 280px; max-height: 480px; overflow-y: auto;
+    white-space: pre-wrap; word-break: break-all; font: inherit; font-weight: bold;
+}
+.file-recv { text-align: center; justify-content: center; align-items: center; gap: 12px; }
+
+/* HOME VIEW */
+.home-card { border: 1px solid #000; background: #fff; display: flex; flex-direction: column; }
+.card-section { padding: 16px; border-bottom: 1px solid #000; }
+.card-section:last-child { border-bottom: none; }
+.launcher-row { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
+.launcher-row input { flex: 1; border: 1px solid #000; padding: 6px 10px; font: inherit; outline: none; }
+.url-slash { font-weight: bold; font-size: 16px; }
+.quick-links { color: #555; }
+.quick-links a { color: #000; }
+.guide-section { display: flex; flex-direction: column; gap: 8px; font-size: 12px; background: #fafafa; }
+.guide-section code { font-weight: bold; }
+
+/* FOOTER & MODALS */
+.app-footer { margin-top: auto; border-top: 1px solid #ccc; padding-top: 10px; color: #666; font-size: 12px; }
+.app-footer a { color: #000; }
 
 #lockoutModal {
     position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
@@ -41,11 +114,14 @@ code { font-family: inherit; font-weight: bold; }
 
 #toast {
     position: fixed; bottom: 16px; right: 16px; background: #000; color: #fff;
-    padding: 6px 12px; font-size: 12px; opacity: 0; transition: opacity 0.15s; pointer-events: none;
+    padding: 6px 14px; font-size: 12px; opacity: 0; transition: opacity 0.15s; pointer-events: none;
 }
 #toast.show { opacity: 1; }
 
-@media (max-width: 600px) {
-    .row { flex-wrap: wrap; }
-    input { width: 100%; }
+/* RESPONSIVE */
+@media (max-width: 720px) {
+    .dual-box { grid-template-columns: 1fr; }
+    .pane-left { border-right: none; border-bottom: 1px solid #000; }
+    .launcher-row { flex-wrap: wrap; }
+    .launcher-row input { width: 100%; }
 }

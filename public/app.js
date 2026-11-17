@@ -1,4 +1,4 @@
-// WireDrop Minimalist Client Logic
+// WireDrop Minimalist 2-Column Client Logic
 (function () {
     const $ = id => document.getElementById(id);
     let slug = "1", isSender = true, isHome = false, os = "linux", sse = null, saveTimer = null, typing = false;
@@ -85,7 +85,12 @@
 
     function renderPayload(d) {
         if (isSender) {
-            d.slot_type === 2 ? showActiveFile(d.slot_file_name, d.slot_file_size) : (typing ? null : $("senderTextarea").value = d.slot_text || "", showTextEditor());
+            if (d.slot_type === 2) {
+                showActiveFile(d.slot_file_name, d.slot_file_size);
+            } else {
+                if (!typing) $("senderTextarea").value = d.slot_text || "";
+                showTextEditor();
+            }
         } else {
             if (d.slot_type === 2) showRecvFile(d.slot_file_name, d.slot_file_size);
             else if (d.slot_type === 1 && d.slot_text) showRecvText(d.slot_text);
@@ -96,7 +101,7 @@
     function showTextEditor() {
         $("btnModeText").classList.add("active");
         $("btnModeFile").classList.remove("active");
-        $("editorContainer").style.display = "block";
+        $("editorContainer").style.display = "flex";
         $("fileDropzone").style.display = "none";
         updateCheatCode();
     }
@@ -105,7 +110,7 @@
         $("btnModeFile").classList.add("active");
         $("btnModeText").classList.remove("active");
         $("editorContainer").style.display = "none";
-        $("fileDropzone").style.display = "block";
+        $("fileDropzone").style.display = "flex";
         updateCheatCode();
     }
 
@@ -119,14 +124,14 @@
     }
 
     function showRecvText(txt) {
-        $("recvTextSection").style.display = "block";
+        $("recvTextSection").style.display = "flex";
         $("recvFileSection").style.display = "none";
         $("recvTextDisplay").querySelector("code").textContent = txt || "# (trống)";
     }
 
     function showRecvFile(name, size) {
         $("recvTextSection").style.display = "none";
-        $("recvFileSection").style.display = "block";
+        $("recvFileSection").style.display = "flex";
         $("recvFileName").textContent = name;
         $("recvFileSize").textContent = fmtSize(size);
         $("btnDownloadFile").href = `/${slug}-r?conn=${connId}`;
@@ -134,7 +139,7 @@
     }
 
     function showRecvEmpty() {
-        $("recvTextSection").style.display = "block";
+        $("recvTextSection").style.display = "flex";
         $("recvFileSection").style.display = "none";
         $("recvTextDisplay").querySelector("code").textContent = "# Chờ dữ liệu từ TX...";
     }
@@ -209,8 +214,24 @@
 
     // Event Listeners
     $("btnModeText").onclick = () => { showTextEditor(); autoSave(); };
-    $("btnModeFile").onclick = () => { showFileDropzone(); $("dropzoneBox").style.display = "block"; $("fileActiveCard").style.display = "none"; };
-    $("btnRemoveFile").onclick = () => { showTextEditor(); autoSave(); };
+    $("btnModeFile").onclick = () => {
+        showFileDropzone();
+        if ($("activeFileName").textContent && $("activeFileName").textContent !== "-") {
+            $("dropzoneBox").style.display = "none";
+            $("fileActiveCard").style.display = "flex";
+        } else {
+            $("dropzoneBox").style.display = "flex";
+            $("fileActiveCard").style.display = "none";
+        }
+    };
+    $("btnRemoveFile").onclick = () => {
+        $("activeFileName").textContent = "-";
+        $("dropzoneBox").style.display = "flex";
+        $("fileActiveCard").style.display = "none";
+        showTextEditor();
+        autoSave();
+    };
+
     $("senderTextarea").oninput = autoSave;
     $("senderTextarea").onkeydown = e => {
         if (e.key === "Tab") {
