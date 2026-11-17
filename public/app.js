@@ -10,7 +10,7 @@
         return res;
     }
     const defaultSlug = generateSlug(4);
-    let slug = defaultSlug, isSender = true, isHome = false, os = "linux", sse = null, saveTimer = null, typing = false, pollTimer = null;
+    let slug = defaultSlug, isSender = true, isHome = false, os = "linux", sse = null, saveTimer = null, typing = false, pollTimer = null, currentUploadXhr = null;
 
     // Quản lý mã kết nối vật lý (Physical Connection ID) lưu theo phiên phòng/vai trò để F5 không bị khóa 409
     function getConnId() {
@@ -217,12 +217,26 @@
         $("btnModeText").classList.remove("active");
         $("editorContainer").style.display = "none";
         $("fileDropzone").style.display = "flex";
+        if (currentUploadXhr) {
+            $("dropzoneBox").style.display = "none";
+            $("fileActiveCard").style.display = "none";
+            $("fileUploadProgressCard").style.display = "flex";
+        } else if ($("activeFileName").textContent && $("activeFileName").textContent !== "-") {
+            $("dropzoneBox").style.display = "none";
+            $("fileUploadProgressCard").style.display = "none";
+            $("fileActiveCard").style.display = "flex";
+        } else {
+            $("dropzoneBox").style.display = "flex";
+            $("fileUploadProgressCard").style.display = "none";
+            $("fileActiveCard").style.display = "none";
+        }
         updateCheatCode();
     }
 
     function showActiveFile(name, size) {
         showFileDropzone();
         $("dropzoneBox").style.display = "none";
+        $("fileUploadProgressCard").style.display = "none";
         $("fileActiveCard").style.display = "flex";
         $("activeFileName").textContent = name;
         $("activeFileSize").textContent = fmtSize(size);
@@ -233,6 +247,7 @@
         $("recvTextSection").style.display = "flex";
         $("recvFileSection").style.display = "none";
         $("recvTextDisplay").querySelector("code").textContent = txt || "# (trống)";
+        $("btnCopyRecvText").style.display = "inline-block";
     }
 
     function showRecvFile(name, size) {
@@ -242,16 +257,57 @@
         $("recvFileSize").textContent = fmtSize(size);
         $("btnDownloadFile").href = `/${slug}-r?conn=${getConnId()}`;
         $("btnDownloadFile").download = name;
+        $("btnCopyRecvText").style.display = "none";
     }
 
     function showRecvEmpty() {
         $("recvTextSection").style.display = "flex";
         $("recvFileSection").style.display = "none";
         $("recvTextDisplay").querySelector("code").textContent = "# Chờ dữ liệu từ TX...";
+        $("btnCopyRecvText").style.display = "inline-block";
     }
 
     function fmtSize(b) {
         return b > 1048576 ? (b / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round((b || 0) / 1024)) + " KB";
+    }
+
+    function fmtSpeed(bytesPerSec) {
+        if (!bytesPerSec || bytesPerSec <= 0) return "0 KB/s";
+        if (bytesPerSec >= 1048576) {
+            return (bytesPerSec / 1048576).toFixed(1) + " MB/s";
+        }
+        return Math.round(bytesPerSec / 1024) + " KB/s";
+    }
+
+    function showUploadProgress(name, totalSize) {
+        $("dropzoneBox").style.display = "none";
+        $("fileActiveCard").style.display = "none";
+        $("fileUploadProgressCard").style.display = "flex";
+
+        $("uploadFileName").textContent = name;
+        $("uploadProgressBar").style.width = "0%";
+        $("uploadPercent").textContent = "0%";
+        $("uploadTransferred").textContent = `0 KB / ${fmtSize(totalSize)}`;
+        $("uploadSpeed").textContent = "0 KB/s";
+        $("uploadEta").textContent = "Tính toán...";
+    }
+
+    function updateUploadProgressUI(percent, loaded, total, speedBytes, etaStr) {
+        $("uploadProgressBar").style.width = `${percent}%`;
+        $("uploadPercent").textContent = `${percent}%`;
+        $("syncIndicator").textContent = `[NẠP: ${percent}%]`;
+        $("uploadTransferred").textContent = `${fmtSize(loaded)} / ${fmtSize(total)}`;
+        $("uploadSpeed").textContent = fmtSpeed(speedBytes);
+        $("uploadEta").textContent = etaStr;
+    }
+
+    function hideUploadProgress() {
+        $("fileUploadProgressCard").style.display = "none";
+        if ($("activeFileName").textContent && $("activeFileName").textContent !== "-") {
+            $("fileActiveCard").style.display = "flex";
+        } else {
+            $("dropzoneBox").style.display = "flex";
+        }
     }
 
     function autoSave() {
@@ -275,19 +331,81 @@
 
     function uploadFile(file) {
         if (!file || !isSender || isHome) return;
+        if (currentUploadXhr) {
+            currentUploadXhr.abort();
+            currentUploadXhr = null;
+        }
+
+        showUploadProgress(file.name, file.size);
+        $("syncIndicator").textContent = "[NẠP: 0%]";
+
         const fd = new FormData();
         fd.append("file", file);
-        $("syncIndicator").textContent = "[NẠP...]";
         const cid = getConnId();
-        fetch(`/${slug}-s?conn=${cid}`, { method: "POST", body: fd })
-            .then(r => {
-                if (r.status === 409) { showLockout("TX đang bị chiếm giữ. Bấm [THỬ KẾT NỐI LẠI] để cắm lại dây!"); throw new Error(); }
-                return r.json();
-            }).then(d => {
-                showActiveFile(d.name, d.size);
-                $("syncIndicator").textContent = "[ĐÃ NẠP ✓]";
-                showToast(`[ĐÃ NẠP ${d.name}]`);
-            }).catch(() => $("syncIndicator").textContent = "[LỖI]");
+
+        const xhr = new XMLHttpRequest();
+        currentUploadXhr = xhr;
+        const startTime = Date.now();
+
+        xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+                const percent = Math.min(100, Math.round((e.loaded / e.total) * 100));
+                const elapsedSec = (Date.now() - startTime) / 1000;
+                let speedBytes = 0;
+                if (elapsedSec > 0.2) speedBytes = e.loaded / elapsedSec;
+
+                let etaStr = "--";
+                if (speedBytes > 0 && e.loaded < e.total) {
+                    const remainingSec = Math.round((e.total - e.loaded) / speedBytes);
+                    if (remainingSec < 60) etaStr = `~${remainingSec}s`;
+                    else etaStr = `~${Math.floor(remainingSec / 60)}m ${remainingSec % 60}s`;
+                } else if (percent === 100) {
+                    etaStr = "Xử lý...";
+                }
+
+                updateUploadProgressUI(percent, e.loaded, e.total, speedBytes, etaStr);
+            }
+        };
+
+        xhr.onload = () => {
+            currentUploadXhr = null;
+            if (xhr.status === 200) {
+                try {
+                    const d = JSON.parse(xhr.responseText);
+                    showActiveFile(d.name, d.size);
+                    $("syncIndicator").textContent = "[ĐÃ NẠP ✓]";
+                    showToast(`[ĐÃ NẠP ${d.name}]`);
+                } catch (_) {
+                    showActiveFile(file.name, file.size);
+                    $("syncIndicator").textContent = "[ĐÃ NẠP ✓]";
+                }
+            } else if (xhr.status === 409) {
+                hideUploadProgress();
+                $("syncIndicator").textContent = "[BỊ KHÓA]";
+                showLockout("TX đang bị chiếm giữ. Bấm [THỬ KẾT NỐI LẠI] để cắm lại dây!");
+            } else {
+                hideUploadProgress();
+                $("syncIndicator").textContent = "[LỖI " + xhr.status + "]";
+                showToast("[LỖI NẠP FILE]");
+            }
+        };
+
+        xhr.onerror = () => {
+            currentUploadXhr = null;
+            hideUploadProgress();
+            $("syncIndicator").textContent = "[MẤT MẠNG]";
+            showToast("[LỖI KẾT NỐI MẠNG]");
+        };
+
+        xhr.onabort = () => {
+            currentUploadXhr = null;
+            hideUploadProgress();
+            $("syncIndicator").textContent = "[ĐÃ HỦY]";
+            showToast("[ĐÃ HỦY TẢI LÊN]");
+        };
+
+        xhr.open("POST", `/${slug}-s?conn=${cid}`);
+        xhr.send(fd);
     }
 
     function updateHomeQuickLinks(s) {
@@ -355,21 +473,38 @@
     $("btnModeFile").onclick = () => {
         showFileDropzone();
         history.replaceState(null, "", location.pathname + location.search + "#file");
-        if ($("activeFileName").textContent && $("activeFileName").textContent !== "-") {
+        if (currentUploadXhr) {
             $("dropzoneBox").style.display = "none";
+            $("fileActiveCard").style.display = "none";
+            $("fileUploadProgressCard").style.display = "flex";
+        } else if ($("activeFileName").textContent && $("activeFileName").textContent !== "-") {
+            $("dropzoneBox").style.display = "none";
+            $("fileUploadProgressCard").style.display = "none";
             $("fileActiveCard").style.display = "flex";
         } else {
             $("dropzoneBox").style.display = "flex";
+            $("fileUploadProgressCard").style.display = "none";
             $("fileActiveCard").style.display = "none";
         }
     };
     $("btnRemoveFile").onclick = () => {
+        if (currentUploadXhr) {
+            currentUploadXhr.abort();
+            currentUploadXhr = null;
+        }
         $("activeFileName").textContent = "-";
         $("dropzoneBox").style.display = "flex";
         $("fileActiveCard").style.display = "none";
+        $("fileUploadProgressCard").style.display = "none";
         if (location.hash === "#file") history.replaceState(null, "", location.pathname + location.search);
         showTextEditor();
         autoSave();
+    };
+    $("btnCancelUpload").onclick = () => {
+        if (currentUploadXhr) {
+            currentUploadXhr.abort();
+            currentUploadXhr = null;
+        }
     };
 
     $("senderTextarea").oninput = autoSave;
@@ -385,7 +520,7 @@
 
     const dz = $("dropzoneBox"), fi = $("singleFileInput");
     dz.onclick = () => fi.click();
-    fi.onchange = e => { if (e.target.files[0]) uploadFile(e.target.files[0]); };
+    fi.onchange = e => { if (e.target.files[0]) { uploadFile(e.target.files[0]); fi.value = ""; } };
     dz.ondragover = e => { e.preventDefault(); dz.classList.add("dragover"); };
     dz.ondragleave = () => dz.classList.remove("dragover");
     dz.ondrop = e => { e.preventDefault(); dz.classList.remove("dragover"); if (e.dataTransfer.files[0]) uploadFile(e.dataTransfer.files[0]); };

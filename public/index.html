@@ -107,6 +107,38 @@ Write-Host 'Hello from WireDrop' -ForegroundColor Green
                             <input type="file" id="singleFileInput" style="display:none;" />
                         </div>
 
+                        <!-- Đang nạp file: Bảng đồng hồ tiến độ (Upload Dashboard) -->
+                        <div id="fileUploadProgressCard" class="file-state-box file-uploading" style="display:none;">
+                            <div class="file-card-tag">[ ĐANG NẠP FILE VÀO ĐƯỜNG ỐNG... ]</div>
+                            <div class="upload-filename-row">
+                                <strong id="uploadFileName">-</strong>
+                            </div>
+                            <div class="progress-bar-container">
+                                <div id="uploadProgressBar" class="progress-bar-fill" style="width: 0%;"></div>
+                            </div>
+                            <div class="upload-metrics-grid">
+                                <div class="metric-item">
+                                    <span class="metric-lbl">TIẾN ĐỘ:</span>
+                                    <strong id="uploadPercent" class="metric-val">0%</strong>
+                                </div>
+                                <div class="metric-item">
+                                    <span class="metric-lbl">DUNG LƯỢNG:</span>
+                                    <span id="uploadTransferred" class="metric-val">0 KB / 0 KB</span>
+                                </div>
+                                <div class="metric-item">
+                                    <span class="metric-lbl">TỐC ĐỘ:</span>
+                                    <span id="uploadSpeed" class="metric-val">0 KB/s</span>
+                                </div>
+                                <div class="metric-item">
+                                    <span class="metric-lbl">DỰ KIẾN:</span>
+                                    <span id="uploadEta" class="metric-val">--</span>
+                                </div>
+                            </div>
+                            <div class="file-card-action">
+                                <button id="btnCancelUpload" class="btn-white" type="button">✕ HỦY TẢI LÊN</button>
+                            </div>
+                        </div>
+
                         <!-- Đã nạp file: Thẻ hiển thị file -->
                         <div id="fileActiveCard" class="file-state-box file-ready" style="display:none;">
                             <div class="file-card-tag">[ FILE ĐANG SẴN SÀNG ]</div>
@@ -176,11 +208,7 @@ Write-Host 'Hello from WireDrop' -ForegroundColor Green
 
                 <!-- THANH THAO TÁC CỐ ĐỊNH Ở DƯỚI -->
                 <div class="rx-fixed-bar">
-                    <div class="rx-bar-header">
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <span class="rx-title">BÊN NHẬN (RX):</span>
-                            <span class="rx-status-tag">[KẾT NỐI: HOẠT ĐỘNG]</span>
-                        </div>
+                    <div class="rx-bar-header" style="justify-content: flex-end;">
                         <button id="btnCopyRecvText" class="btn-black">COPY DỮ LIỆU</button>
                     </div>
                 </div>
