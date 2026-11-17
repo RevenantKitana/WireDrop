@@ -4,8 +4,8 @@
 
 [![Go Version](https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go)](https://golang.org)
 [![Dependencies](https://img.shields.io/badge/Dependencies-Zero%20(Standard%20Library)-brightgreen)](https://golang.org/pkg/)
-[![Binary Size](https://img.shields.io/badge/Binary%20Size-~6.8MB-blue)](https://github.com/RevenantKitana/WireDrop)
-[![Architecture](https://img.shields.io/badge/Architecture-Two--Ended%20Wire%20v4.0.0-purple)](SPECIFICATION.md)
+[![Version](https://img.shields.io/badge/Version-v0.5.1-blue)](changelog/README.md)
+[![Architecture](https://img.shields.io/badge/Architecture-Two--Ended%20Wire%20(Physical%20Lock)-purple)](SPECIFICATION.md)
 [![License](https://img.shields.io/badge/License-MIT-orange.svg)](LICENSE)
 
 ---

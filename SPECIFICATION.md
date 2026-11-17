@@ -1,6 +1,6 @@
 # TÀI LIỆU ĐẶC TẢ YÊU CẦU VÀ THIẾT KẾ KIẾN TRÚC HỆ THỐNG
 # DỰ ÁN: WireDrop (TermPipe)
-**Phiên bản:** 4.0.0 (Kiến Trúc Khóa Kết Nối Vật Lý Thuần Túy - Pure Physical Connection Lock)  
+**Phiên bản:** v0.5.1 (Kiến Trúc Khóa Kết Nối Vật Lý Thuần Túy - Pure Physical Connection Lock)  
 **Ngôn ngữ triển khai:** **Go (Golang 1.22+) – 100% Standard Library (Zero-Dependency)**  
 **Trạng thái:** Chuẩn hóa Kiến trúc Bản Update (Ready for Implementation)  
 **Ngày cập nhật:** 2026-11-16  

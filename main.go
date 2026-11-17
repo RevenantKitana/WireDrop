@@ -14,6 +14,7 @@ import (
 	"time"
 )
 
+const Version = "v0.5.1"
 const defaultSlugChars = "abcdefghijklmnopqrstuvwxyz0123456789"
 
 func randomSlug(n int) string {
@@ -212,7 +213,7 @@ func main() {
 
 	sampleSlug := randomSlug(4)
 	fmt.Println("================================================================")
-	fmt.Println("  ⚡ WireDrop v4.0.0 (Pure Physical Connection Lock) is running!")
+	fmt.Printf("  ⚡ WireDrop %s (Pure Physical Connection Lock) is running!\n", Version)
 	fmt.Printf("  • Web Hub (Trang chu #):    http://localhost:%s/#\n", port)
 	fmt.Println("    (Mo link tren de xem Cheatsheet hoac tu tao phong tuy y)")
 	fmt.Println("  ----------------------------------------------------------------")
