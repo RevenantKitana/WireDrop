@@ -1,14 +1,8 @@
-# ==============================================================================
+﻿# ==============================================================================
 # WireDrop FastHosting CLI (Windows PowerShell)
-# Tự động tải Cloudflare Portable, tự cấu hình .env và điều phối đường hầm
 # ==============================================================================
 
-try {
-    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-} catch {}
-$OutputEncoding = [System.Text.Encoding]::UTF8
-
-# Xác định thư mục script tuyệt đối chuẩn xác
+# Xac dinh thu muc script tuyet doi
 $ScriptDir = $PSScriptRoot
 if (-not $ScriptDir) {
     if ($MyInvocation.MyCommand.Path) {
@@ -29,7 +23,7 @@ if (-not (Test-Path $BinDir)) {
     New-Item -ItemType Directory -Path $BinDir -Force | Out-Null
 }
 
-# 1. Đọc tệp .env
+# 1. Doc tep .env
 function Load-Env {
     $global:Port = "8080"
     $global:CloudflareToken = ""
@@ -53,7 +47,7 @@ function Load-Env {
     if (-not $global:Port) { $global:Port = "8080" }
 }
 
-# 2. Quét tìm file thực thi WireDrop đã có
+# 2. Quet tim file thuc thi WireDrop da co
 function Find-WiredropBin {
     $candidates = @(
         (Join-Path $ScriptDir "wiredrop.exe"),
@@ -75,12 +69,12 @@ function Find-WiredropBin {
         return
     }
 
-    Write-Host "[✕] Không tìm thấy file thực thi WireDrop (wiredrop.exe)!" -ForegroundColor Red
-    Write-Host ">> Vui lòng đặt file thực thi wiredrop.exe vào thư mục: $ScriptDir" -ForegroundColor Yellow
-    throw "Thiếu file thực thi wiredrop.exe"
+    Write-Host "[X] Khong tim thay file thuc thi WireDrop (wiredrop.exe)!" -ForegroundColor Red
+    Write-Host ">> Vui long dat file thuc thi wiredrop.exe vao thu muc: $ScriptDir" -ForegroundColor Yellow
+    throw "Thieu file thuc thi wiredrop.exe"
 }
 
-# 3. Tự động tải Cloudflare Portable nếu chưa có
+# 3. Tu dong tai Cloudflare Portable neu chua co
 function Ensure-Cloudflared {
     if (Test-Path $CfBin) { return }
 
@@ -90,7 +84,7 @@ function Ensure-Cloudflared {
         return
     }
 
-    Write-Host "[*] Đang tự động tải Cloudflare Portable (windows-amd64)..." -ForegroundColor Cyan
+    Write-Host "[*] Dang tu dong tai Cloudflare Portable (windows-amd64)..." -ForegroundColor Cyan
     $url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
 
     try {
@@ -101,77 +95,78 @@ function Ensure-Cloudflared {
             [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
             Invoke-WebRequest -Uri $url -OutFile $CfBin -UseBasicParsing
         }
-        Write-Host "[✓] Đã tải Cloudflare Portable về: $CfBin" -ForegroundColor Green
+        Write-Host "[OK] Da tai Cloudflare Portable ve: $CfBin" -ForegroundColor Green
     } catch {
-        Write-Host "[✕] Tải Cloudflare Portable thất bại: $_" -ForegroundColor Red
-        throw "Không thể tải cloudflared.exe"
+        Write-Host "[X] Tai Cloudflare Portable that bai: $_" -ForegroundColor Red
+        throw "Khong the tai cloudflared.exe"
     }
 }
 
-# 4. Tự động thiết lập .env cho Domain cá nhân
+# 4. Thiet lap .env cho Domain ca nhan
 function Setup-CustomDomainEnv {
     Write-Host ""
     Write-Host "================================================================" -ForegroundColor White
-    Write-Host "        THIẾT LẬP DOMAIN CÁ NHÂN VỚI CLOUDFLARE TUNNEL          " -ForegroundColor White
+    Write-Host "        THIET LAP DOMAIN CA NHAN VOI CLOUDFLARE TUNNEL          " -ForegroundColor White
     Write-Host "================================================================" -ForegroundColor White
-    Write-Host "Để dùng Domain riêng cố định, bạn cần Token từ Cloudflare Dashboard:"
-    Write-Host " 1. Mở: " -NoNewline; Write-Host "https://dash.cloudflare.com/" -ForegroundColor Cyan -NoNewline; Write-Host " > Zero Trust > Networks > Tunnels"
-    Write-Host " 2. Bấm " -NoNewline; Write-Host "Add a tunnel" -ForegroundColor Yellow -NoNewline; Write-Host " > Chọn Cloudflared > Copy chuỗi TOKEN."
-    Write-Host " 3. Tại tab Public Hostname, trỏ subdomain về: " -NoNewline; Write-Host "http://localhost:$Port" -ForegroundColor Green
+    Write-Host "De dung Domain rieng co dinh, ban can Token tu Cloudflare Dashboard:"
+    Write-Host " 1. Mo: " -NoNewline; Write-Host "https://dash.cloudflare.com/" -ForegroundColor Cyan -NoNewline; Write-Host " > Zero Trust > Networks > Tunnels"
+    Write-Host " 2. Bam " -NoNewline; Write-Host "Add a tunnel" -ForegroundColor Yellow -NoNewline; Write-Host " > Chon Cloudflared > Copy chuoi TOKEN."
+    Write-Host " 3. Tai tab Public Hostname, tro subdomain ve: " -NoNewline; Write-Host "http://localhost:$Port" -ForegroundColor Green
     Write-Host "----------------------------------------------------------------"
     Write-Host ""
 
-    $token = (Read-Host ">> Dán Cloudflare Tunnel Token của bạn (eyJh...)").Trim()
+    $token = (Read-Host ">> Dan Cloudflare Tunnel Token cua ban (eyJh...)").Trim()
     if (-not $token) {
-        Write-Host "[!] Token không được để trống. Hủy cấu hình." -ForegroundColor Red
+        Write-Host "[!] Token khong duoc de trong. Huy cau hinh." -ForegroundColor Red
         return $false
     }
 
-    $domain = (Read-Host ">> Nhập tên domain cá nhân của bạn (ví dụ: w.yourdomain.com)").Trim()
+    $domain = (Read-Host ">> Nhap ten domain ca nhan cua ban (vi du: w.yourdomain.com)").Trim()
 
     $lines = @(
-        "# Cấu hình WireDrop FastHosting (Tự động tạo bởi fasthost CLI)",
+        "# Cau hinh WireDrop FastHosting (Tu dong tao boi fasthost CLI)",
         "PORT=$Port",
         "CLOUDFLARE_TUNNEL_TOKEN=$token",
         "CUSTOM_DOMAIN=$domain"
     )
     $lines | Set-Content -Path $EnvFile -Encoding UTF8
-    Write-Host "[✓] Đã lưu cấu hình vào .env thành công!" -ForegroundColor Green
+    Write-Host "[OK] Da luu cau hinh vao .env thanh cong!" -ForegroundColor Green
     Load-Env
     return $true
 }
 
-# 5. Khởi chạy Quick Tunnel (Domain ngẫu nhiên)
+# 5. Khoi chay Quick Tunnel (Domain ngau nhien)
 function Run-QuickTunnel {
     Stop-Process -Name "wiredrop" -Force -ErrorAction SilentlyContinue
     Stop-Process -Name "cloudflared" -Force -ErrorAction SilentlyContinue
     Start-Sleep -Milliseconds 300
 
-    Write-Host "[*] Khởi động WireDrop trên cổng $Port..." -ForegroundColor Cyan
-    $wireLog = Join-Path $ScriptDir ".wire_server.log"
-    if (Test-Path $wireLog) { Remove-Item $wireLog -Force -ErrorAction SilentlyContinue }
+    Write-Host "[*] Khoi dong WireDrop tren cong $Port..." -ForegroundColor Cyan
+    $wireErrLog = Join-Path $ScriptDir ".wire_err.log"
+    $wireOutLog = Join-Path $ScriptDir ".wire_out.log"
+    if (Test-Path $wireErrLog) { Remove-Item $wireErrLog -Force -ErrorAction SilentlyContinue }
+    if (Test-Path $wireOutLog) { Remove-Item $wireOutLog -Force -ErrorAction SilentlyContinue }
 
-    $wireProc = Start-Process -FilePath $WiredropBin -ArgumentList "-port $Port" -PassThru -WindowStyle Hidden -RedirectStandardError $wireLog -RedirectStandardOutput $wireLog
+    $wireProc = Start-Process -FilePath $WiredropBin -ArgumentList "-port $Port" -PassThru -WindowStyle Hidden -RedirectStandardError $wireErrLog -RedirectStandardOutput $wireOutLog
 
     Start-Sleep -Milliseconds 600
 
     if ($wireProc.HasExited) {
-        Write-Host "[✕] Không thể khởi động WireDrop (cổng $Port bị chiếm)! Log chi tiết:" -ForegroundColor Red
-        if (Test-Path $wireLog) { Get-Content $wireLog }
-        throw "Lỗi khởi động WireDrop"
+        Write-Host "[X] Khong the khoi dong WireDrop (cong $Port bi chiem)! Log:" -ForegroundColor Red
+        if (Test-Path $wireErrLog) { Get-Content $wireErrLog }
+        throw "Loi khoi dong WireDrop"
     }
 
-    Write-Host "[*] Đang mở đường hầm Cloudflare Quick Tunnel (protocol: http2)..." -ForegroundColor Cyan
+    Write-Host "[*] Dang mo duong ham Cloudflare Quick Tunnel (protocol: http2)..." -ForegroundColor Cyan
     $logFile = Join-Path $ScriptDir ".cf_quick.log"
     $logOutFile = Join-Path $ScriptDir ".cf_quick_out.log"
     if (Test-Path $logFile) { Remove-Item $logFile -Force -ErrorAction SilentlyContinue }
     if (Test-Path $logOutFile) { Remove-Item $logOutFile -Force -ErrorAction SilentlyContinue }
 
-    # Dùng --protocol http2 để tránh bị nhà mạng chặn UDP/QUIC tại Việt Nam
     $cfProc = Start-Process -FilePath $CfBin -ArgumentList "tunnel --protocol http2 --url http://localhost:$Port" -PassThru -WindowStyle Hidden -RedirectStandardError $logFile -RedirectStandardOutput $logOutFile
 
     $tunnelUrl = ""
-    Write-Host "[*] Đang kết nối tới Cloudflare Edge" -NoNewline
+    Write-Host "[*] Dang ket noi toi Cloudflare Edge" -NoNewline
     for ($i = 0; $i -lt 50; $i++) {
         Start-Sleep -Milliseconds 500
         Write-Host "." -NoNewline
@@ -194,11 +189,11 @@ function Run-QuickTunnel {
     Write-Host ""
 
     if (-not $tunnelUrl) {
-        Write-Host "[✕] Không bắt được URL Cloudflare. Log chi tiết:" -ForegroundColor Red
+        Write-Host "[X] Khong bat duoc URL Cloudflare. Log chi tiet:" -ForegroundColor Red
         if (Test-Path $logFile) { Get-Content $logFile }
         if (Test-Path $logOutFile) { Get-Content $logOutFile }
         Stop-Process -Id $wireProc.Id, $cfProc.Id -Force -ErrorAction SilentlyContinue
-        throw "Không bắt được URL Cloudflare"
+        throw "Khong bat duoc URL Cloudflare"
     }
 
     $chars = "abcdefghijklmnopqrstuvwxyz0123456789"
@@ -206,15 +201,19 @@ function Run-QuickTunnel {
 
     Write-Host ""
     Write-Host "================================================================" -ForegroundColor Green
-    Write-Host "       ⚡ WIREDROP FASTHOST ONLINE (DOMAIN NGẪU NHIÊN)           " -ForegroundColor White
+    Write-Host "       WIREDROP FASTHOST ONLINE (DOMAIN NGAU NHIEN)             " -ForegroundColor White
     Write-Host "================================================================" -ForegroundColor Green
-    Write-Host " • Web Soạn Thảo (TX):  " -NoNewline; Write-Host "$tunnelUrl/$randSlug-s" -ForegroundColor Cyan
-    Write-Host " • Lệnh Máy Đích (RX):"
-    Write-Host "   Linux/macOS:        " -NoNewline; Write-Host "curl -sL $tunnelUrl/$randSlug-r | sh" -ForegroundColor Yellow
-    Write-Host "   Windows PowerShell: " -NoNewline; Write-Host "irm $tunnelUrl/$randSlug-r | iex" -ForegroundColor Yellow
-    Write-Host " • Tải File (RX):      " -NoNewline; Write-Host "curl -sLJO $tunnelUrl/$randSlug-r" -ForegroundColor Yellow
+    Write-Host " • Web Hub (Trang chu #):   " -NoNewline; Write-Host "$tunnelUrl/#" -ForegroundColor Cyan
+    Write-Host "   (Mo link tren de xem Cheatsheet hoac tu tao phong tuy y)" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host " • Vi du truyen nhanh (Phong mau ngau nhien: $randSlug):" -ForegroundColor White
+    Write-Host "   - Web phat (TX):         " -NoNewline; Write-Host "$tunnelUrl/$randSlug-s" -ForegroundColor Cyan
+    Write-Host "   - Lenh nhan (RX):"
+    Write-Host "     Linux/macOS:           " -NoNewline; Write-Host "curl -sL $tunnelUrl/$randSlug-r | sh" -ForegroundColor Yellow
+    Write-Host "     Windows PowerShell:    " -NoNewline; Write-Host "irm $tunnelUrl/$randSlug-r | iex" -ForegroundColor Yellow
+    Write-Host "     Tai File:              " -NoNewline; Write-Host "curl -sLJO $tunnelUrl/$randSlug-r" -ForegroundColor Yellow
     Write-Host "----------------------------------------------------------------"
-    Write-Host " [Nhấn Ctrl + C để dừng và đóng đường hầm bất cứ lúc nào]" -ForegroundColor White
+    Write-Host " [Nhan Ctrl + C de dung va dong duong ham bat cu luc nao]" -ForegroundColor White
     Write-Host "================================================================" -ForegroundColor Green
     Write-Host ""
 
@@ -223,16 +222,17 @@ function Run-QuickTunnel {
             Start-Sleep -Seconds 1
         }
     } finally {
-        Write-Host "`n[*] Đang đóng đường hầm và dừng máy chủ WireDrop..." -ForegroundColor Yellow
+        Write-Host "`n[*] Dang dong duong ham va dung may chu WireDrop..." -ForegroundColor Yellow
         Stop-Process -Id $wireProc.Id, $cfProc.Id -Force -ErrorAction SilentlyContinue
         if (Test-Path $logFile) { Remove-Item $logFile -Force -ErrorAction SilentlyContinue }
         if (Test-Path $logOutFile) { Remove-Item $logOutFile -Force -ErrorAction SilentlyContinue }
-        if (Test-Path $wireLog) { Remove-Item $wireLog -Force -ErrorAction SilentlyContinue }
-        Write-Host "[✓] Đã giải phóng cổng $Port. Thoát an toàn." -ForegroundColor Green
+        if (Test-Path $wireErrLog) { Remove-Item $wireErrLog -Force -ErrorAction SilentlyContinue }
+        if (Test-Path $wireOutLog) { Remove-Item $wireOutLog -Force -ErrorAction SilentlyContinue }
+        Write-Host "[OK] Da giai phong cong $Port. Thoat an toan." -ForegroundColor Green
     }
 }
 
-# 6. Khởi chạy Custom Domain (Named Tunnel)
+# 6. Khoi chay Custom Domain (Named Tunnel)
 function Run-CustomTunnel {
     if (-not $CloudflareToken) {
         if (-not (Setup-CustomDomainEnv)) { return }
@@ -242,21 +242,23 @@ function Run-CustomTunnel {
     Stop-Process -Name "cloudflared" -Force -ErrorAction SilentlyContinue
     Start-Sleep -Milliseconds 300
 
-    Write-Host "[*] Khởi động WireDrop trên cổng $Port..." -ForegroundColor Cyan
-    $wireLog = Join-Path $ScriptDir ".wire_server.log"
-    if (Test-Path $wireLog) { Remove-Item $wireLog -Force -ErrorAction SilentlyContinue }
+    Write-Host "[*] Khoi dong WireDrop tren cong $Port..." -ForegroundColor Cyan
+    $wireErrLog = Join-Path $ScriptDir ".wire_err.log"
+    $wireOutLog = Join-Path $ScriptDir ".wire_out.log"
+    if (Test-Path $wireErrLog) { Remove-Item $wireErrLog -Force -ErrorAction SilentlyContinue }
+    if (Test-Path $wireOutLog) { Remove-Item $wireOutLog -Force -ErrorAction SilentlyContinue }
 
-    $wireProc = Start-Process -FilePath $WiredropBin -ArgumentList "-port $Port" -PassThru -WindowStyle Hidden -RedirectStandardError $wireLog -RedirectStandardOutput $wireLog
+    $wireProc = Start-Process -FilePath $WiredropBin -ArgumentList "-port $Port" -PassThru -WindowStyle Hidden -RedirectStandardError $wireErrLog -RedirectStandardOutput $wireOutLog
 
     Start-Sleep -Milliseconds 600
 
     if ($wireProc.HasExited) {
-        Write-Host "[✕] Không thể khởi động WireDrop (cổng $Port bị chiếm)! Log chi tiết:" -ForegroundColor Red
-        if (Test-Path $wireLog) { Get-Content $wireLog }
-        throw "Lỗi khởi động WireDrop"
+        Write-Host "[X] Khong the khoi dong WireDrop (cong $Port bi chiem)! Log:" -ForegroundColor Red
+        if (Test-Path $wireErrLog) { Get-Content $wireErrLog }
+        throw "Loi khoi dong WireDrop"
     }
 
-    Write-Host "[*] Đang kết nối Cloudflare Named Tunnel theo Token (protocol: http2)..." -ForegroundColor Cyan
+    Write-Host "[*] Dang ket noi Cloudflare Named Tunnel theo Token (protocol: http2)..." -ForegroundColor Cyan
     $cfProc = Start-Process -FilePath $CfBin -ArgumentList "tunnel --protocol http2 run --token $CloudflareToken" -PassThru -WindowStyle Hidden
 
     $chars = "abcdefghijklmnopqrstuvwxyz0123456789"
@@ -265,15 +267,19 @@ function Run-CustomTunnel {
 
     Write-Host ""
     Write-Host "================================================================" -ForegroundColor Green
-    Write-Host "       ⚡ WIREDROP FASTHOST ONLINE (DOMAIN CÁ NHÂN CỐ ĐỊNH)       " -ForegroundColor White
+    Write-Host "       WIREDROP FASTHOST ONLINE (DOMAIN CA NHAN CO DINH)        " -ForegroundColor White
     Write-Host "================================================================" -ForegroundColor Green
-    Write-Host " • Web Soạn Thảo (TX):  " -NoNewline; Write-Host "https://$displayHost/$randSlug-s" -ForegroundColor Cyan
-    Write-Host " • Lệnh Máy Đích (RX):"
-    Write-Host "   Linux/macOS:        " -NoNewline; Write-Host "curl -sL https://$displayHost/$randSlug-r | sh" -ForegroundColor Yellow
-    Write-Host "   Windows PowerShell: " -NoNewline; Write-Host "irm https://$displayHost/$randSlug-r | iex" -ForegroundColor Yellow
-    Write-Host " • Tải File (RX):      " -NoNewline; Write-Host "curl -sLJO https://$displayHost/$randSlug-r" -ForegroundColor Yellow
+    Write-Host " • Web Hub (Trang chu #):   " -NoNewline; Write-Host "https://$displayHost/#" -ForegroundColor Cyan
+    Write-Host "   (Mo link tren de xem Cheatsheet hoac tu tao phong tuy y)" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host " • Vi du truyen nhanh (Phong mau ngau nhien: $randSlug):" -ForegroundColor White
+    Write-Host "   - Web phat (TX):         " -NoNewline; Write-Host "https://$displayHost/$randSlug-s" -ForegroundColor Cyan
+    Write-Host "   - Lenh nhan (RX):"
+    Write-Host "     Linux/macOS:           " -NoNewline; Write-Host "curl -sL https://$displayHost/$randSlug-r | sh" -ForegroundColor Yellow
+    Write-Host "     Windows PowerShell:    " -NoNewline; Write-Host "irm https://$displayHost/$randSlug-r | iex" -ForegroundColor Yellow
+    Write-Host "     Tai File:              " -NoNewline; Write-Host "curl -sLJO https://$displayHost/$randSlug-r" -ForegroundColor Yellow
     Write-Host "----------------------------------------------------------------"
-    Write-Host " [Nhấn Ctrl + C để dừng và ngắt kết nối domain cá nhân]" -ForegroundColor White
+    Write-Host " [Nhan Ctrl + C de dung va ngat ket noi domain ca nhan]" -ForegroundColor White
     Write-Host "================================================================" -ForegroundColor Green
     Write-Host ""
 
@@ -282,10 +288,11 @@ function Run-CustomTunnel {
             Start-Sleep -Seconds 1
         }
     } finally {
-        Write-Host "`n[*] Đang đóng đường hầm và dừng máy chủ WireDrop..." -ForegroundColor Yellow
+        Write-Host "`n[*] Dang dong duong ham va dung may chu WireDrop..." -ForegroundColor Yellow
         Stop-Process -Id $wireProc.Id, $cfProc.Id -Force -ErrorAction SilentlyContinue
-        if (Test-Path $wireLog) { Remove-Item $wireLog -Force -ErrorAction SilentlyContinue }
-        Write-Host "[✓] Đã giải phóng cổng $Port. Thoát an toàn." -ForegroundColor Green
+        if (Test-Path $wireErrLog) { Remove-Item $wireErrLog -Force -ErrorAction SilentlyContinue }
+        if (Test-Path $wireOutLog) { Remove-Item $wireOutLog -Force -ErrorAction SilentlyContinue }
+        Write-Host "[OK] Da giai phong cong $Port. Thoat an toan." -ForegroundColor Green
     }
 }
 
@@ -295,49 +302,51 @@ try {
     Find-WiredropBin
     Ensure-Cloudflared
 
-    if ($args[0] -eq "1" -or $args[0] -eq "--quick") {
-        Run-QuickTunnel
-        return
-    }
-    if ($args[0] -eq "2" -or $args[0] -eq "--custom") {
-        Run-CustomTunnel
-        return
+    if ($args.Count -gt 0) {
+        if ($args[0] -eq "1" -or $args[0] -eq "--quick") {
+            Run-QuickTunnel
+            return
+        }
+        if ($args[0] -eq "2" -or $args[0] -eq "--custom") {
+            Run-CustomTunnel
+            return
+        }
     }
 
     $label2 = if ($CloudflareToken) {
-        if ($CustomDomain) { "Domain cá nhân ($CustomDomain)" } else { "Domain cá nhân (Đã cấu hình Token)" }
+        if ($CustomDomain) { "Domain ca nhan ($CustomDomain)" } else { "Domain ca nhan (Da cau hinh Token)" }
     } else {
-        "Domain cá nhân (Chưa cấu hình)"
+        "Domain ca nhan (Chua cau hinh)"
     }
 
     Write-Host ""
     Write-Host "================================================================" -ForegroundColor White
-    Write-Host "          ⚡ WIREDROP FASTHOSTING CLI - CLOUDFLARE TUNNEL       " -ForegroundColor White
+    Write-Host "          WIREDROP FASTHOSTING CLI - CLOUDFLARE TUNNEL          " -ForegroundColor White
     Write-Host "================================================================" -ForegroundColor White
-    Write-Host " [1] Domain ngẫu nhiên (Mặc định)"
+    Write-Host " [1] Domain ngau nhien (Mac dinh)"
     if ($CloudflareToken) {
         Write-Host " [2] $label2" -ForegroundColor Green
     } else {
         Write-Host " [2] $label2" -ForegroundColor Yellow
     }
-    Write-Host " [0] Thoát"
+    Write-Host " [0] Thoat"
     Write-Host "----------------------------------------------------------------"
-    $choice = Read-Host "Lựa chọn của bạn [1/2/0] (Mặc định: 1)"
+    $choice = Read-Host "Lua chon cua ban [1/2/0] (Mac dinh: 1)"
     if (-not $choice) { $choice = "1" }
 
     switch ($choice) {
         "1" { Run-QuickTunnel }
         "2" { Run-CustomTunnel }
-        "0" { Write-Host "Tạm biệt!"; return }
+        "0" { Write-Host "Tam biet!"; return }
         default {
-            Write-Host "[!] Lựa chọn không hợp lệ, chuyển về mặc định [1]." -ForegroundColor Yellow
+            Write-Host "[!] Lua chon khong hop le, chuyen ve mac dinh [1]." -ForegroundColor Yellow
             Run-QuickTunnel
         }
     }
 } catch {
     Write-Host ""
     Write-Host "================================================================" -ForegroundColor Red
-    Write-Host "[✕] ĐÃ XẢY RA LỖI TRONG QUÁ TRÌNH THỰC THI:" -ForegroundColor Red
+    Write-Host "[X] DA XAY RA LOI TRONG QUA TRINH THUC THI:" -ForegroundColor Red
     Write-Host $_.Exception.ToString() -ForegroundColor Red
     Write-Host "================================================================" -ForegroundColor Red
 }
