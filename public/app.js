@@ -1,7 +1,16 @@
-// WireDrop Minimalist 2-Column Client Logic
+// WireDrop Minimalist Unified Form Client Logic
 (function () {
     const $ = id => document.getElementById(id);
-    let slug = "1", isSender = true, isHome = false, os = "linux", sse = null, saveTimer = null, typing = false;
+    function generateSlug(len = 4) {
+        const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+        let res = "";
+        for (let i = 0; i < len; i++) {
+            res += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return res;
+    }
+    const defaultSlug = generateSlug(4);
+    let slug = defaultSlug, isSender = true, isHome = false, os = "linux", sse = null, saveTimer = null, typing = false;
     const connId = "c_" + Math.random().toString(36).slice(2, 9) + Date.now().toString(36);
 
     function showToast(msg) {
@@ -29,17 +38,13 @@
         if (isHome) return;
         const url = `${location.origin}/${slug}-r`;
         const isFile = $("btnModeFile").classList.contains("active");
-        const cn = $("cheatNote");
         if (os === "linux") {
             $("cheatCode").textContent = isFile ? `curl -sLJO ${url}` : `curl -sL ${url} | sh`;
-            if (cn) cn.textContent = isFile ? "curl -sLJO: Tự động lưu đúng tên file gốc" : "Nhận và thực thi ngay lập tức qua pipe";
         } else if (os === "win") {
             const fname = $("activeFileName").textContent !== "-" ? $("activeFileName").textContent : "file.bin";
             $("cheatCode").textContent = isFile ? `iwr ${url} -OutFile ${fname}` : `irm ${url} | iex`;
-            if (cn) cn.textContent = isFile ? "Tải file trực tiếp về thư mục hiện tại" : "PowerShell: Nhận và thực thi trong bộ nhớ";
         } else {
             $("cheatCode").textContent = url;
-            if (cn) cn.textContent = "Truy cập trực tiếp trên trình duyệt Web";
         }
     }
 
@@ -193,6 +198,12 @@
             }).catch(() => $("syncIndicator").textContent = "[LỖI]");
     }
 
+    function updateHomeQuickLinks(s) {
+        const tx = $("quickTxLink"), rx = $("quickRxLink");
+        if (tx) { tx.href = `/${s}-s`; tx.textContent = `/${s}-s (TX)`; }
+        if (rx) { rx.href = `/${s}-r`; rx.textContent = `/${s}-r (RX)`; }
+    }
+
     function detectRole() {
         const path = location.pathname.replace(/^\/|\/$/g, "");
         if (path === "" || location.hash === "#") {
@@ -200,6 +211,8 @@
             document.title = "WireDrop - Web → Terminal Relay";
             $("homeView").style.display = "flex";
             $("senderView").style.display = $("receiverView").style.display = $("wireBadge").style.display = $("wireStatusCard").style.display = "none";
+            if (!$("roomInput").value) $("roomInput").value = defaultSlug;
+            updateHomeQuickLinks($("roomInput").value || defaultSlug);
             if (sse) { sse.close(); sse = null; }
             return;
         }
@@ -209,7 +222,7 @@
         $("wireStatusCard").style.display = "flex";
 
         isSender = !path.endsWith("-r");
-        slug = path.replace(/-[sr]$/, "") || "1";
+        slug = path.replace(/-[sr]$/, "") || defaultSlug;
         if (!path.endsWith("-s") && !path.endsWith("-r")) history.replaceState(null, "", `/${slug}-s`);
 
         $("badgeRole").textContent = isSender ? "TX" : "RX";
@@ -282,11 +295,15 @@
     });
 
     const openRoom = suf => {
-        const s = ($("roomInput").value || "1").trim().replace(/[^a-zA-Z0-9_-]/g, "") || "1";
+        const s = ($("roomInput").value || "").trim().replace(/[^a-zA-Z0-9_-]/g, "") || defaultSlug;
         location.href = `/${s}-${suf}`;
     };
     $("btnOpenSender").onclick = () => openRoom("s");
     $("btnOpenReceiver").onclick = () => openRoom("r");
+    $("roomInput").oninput = () => {
+        const s = ($("roomInput").value || "").trim().replace(/[^a-zA-Z0-9_-]/g, "") || defaultSlug;
+        updateHomeQuickLinks(s);
+    };
     $("roomInput").onkeydown = e => { if (e.key === "Enter") openRoom("s"); };
 
     window.onhashchange = window.onpopstate = detectRole;

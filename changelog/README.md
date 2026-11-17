@@ -3,7 +3,8 @@
 Thư mục này lưu trữ toàn bộ các file changelog chi tiết của dự án **WireDrop**, được phân tách theo từng phiên bản và mốc phát triển.
 
 ## Danh Sách Changelog:
-* [v0.17.0 - Sửa lỗi co cụm bề ngang Workspace (Full 92% Stretch Fix)](v0.17.0-fix-workspace-fullwidth-stretch.md) - *(2026-11-17)* 🚀 **Mới nhất**
+* [v0.18.0 - Tinh giản diễn giải & Mặc định slug 4 ký tự ngẫu nhiên](v0.18.0-clean-ui-and-random-slug.md) - *(2026-11-17)* 🚀 **Mới nhất**
+* [v0.17.0 - Sửa lỗi co cụm bề ngang Workspace (Full 92% Stretch Fix)](v0.17.0-fix-workspace-fullwidth-stretch.md) - *(2026-11-17)*
 * [v0.16.0 - Mở rộng bề ngang bằng phần trăm (Wide Percentage Layout)](v0.16.0-widescreen-percentage-width.md) - *(2026-11-17)*
 * [v0.15.0 - Kế thừa cùng 1 form & Đưa thanh lệnh RX xuống đáy](v0.15.0-unified-form-bottom-rx-bar.md) - *(2026-11-17)*
 * [v0.14.0 - Khóa cố định chiều cao & Triệt tiêu biến thiên kích thước (Zero Jitter UI)](v0.14.0-zero-jitter-fixed-height.md) - *(2026-11-17)*

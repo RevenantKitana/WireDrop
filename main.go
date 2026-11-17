@@ -1,8 +1,10 @@
 package main
 
 import (
+	"crypto/rand"
 	"embed"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"net/http"
@@ -10,6 +12,19 @@ import (
 	"strings"
 	"time"
 )
+
+const defaultSlugChars = "abcdefghijklmnopqrstuvwxyz0123456789"
+
+func randomSlug(n int) string {
+	b := make([]byte, n)
+	if _, err := io.ReadFull(rand.Reader, b); err != nil {
+		return "wire"
+	}
+	for i := range b {
+		b[i] = defaultSlugChars[int(b[i])%len(defaultSlugChars)]
+	}
+	return string(b)
+}
 
 // Nhúng toàn bộ thư mục public/ vào trong file binary khi biên dịch
 //
@@ -139,7 +154,7 @@ func main() {
 	// 5. Điều hướng mặc định cho trang chủ root /
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		if isCLI(r) {
-			http.Redirect(w, r, "/1-r", http.StatusFound)
+			http.Redirect(w, r, "/"+randomSlug(4)+"-r", http.StatusFound)
 		} else {
 			serveIndexHTML(w, r)
 		}
@@ -153,11 +168,12 @@ func main() {
 
 	handler := corsMiddleware(loggingMiddleware(mux))
 
+	sampleSlug := randomSlug(4)
 	fmt.Println("================================================================")
 	fmt.Println("  ⚡ WireDrop v4.0.0 (Pure Physical Connection Lock) is running!")
-	fmt.Printf("  • Master Sender UI:    http://localhost:%s/1-s\n", port)
-	fmt.Printf("  • Worker Receiver CLI: curl -sL http://localhost:%s/1-r | sh\n", port)
-	fmt.Printf("  • Windows Receiver:    irm http://localhost:%s/1-r | iex\n", port)
+	fmt.Printf("  • Master Sender UI:    http://localhost:%s/%s-s\n", port, sampleSlug)
+	fmt.Printf("  • Worker Receiver CLI: curl -sL http://localhost:%s/%s-r | sh\n", port, sampleSlug)
+	fmt.Printf("  • Windows Receiver:    irm http://localhost:%s/%s-r | iex\n", port, sampleSlug)
 	fmt.Println("  • 100% Go Standard Library • Zero-Dependency")
 	fmt.Println("================================================================")
 

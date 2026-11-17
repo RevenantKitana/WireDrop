@@ -30,18 +30,17 @@
                 <div class="payload-frame home-hero-box">
                     <div class="home-brand">
                         <h2>WIREDROP // WEB → TERMINAL RELAY</h2>
-                        <p class="brand-desc">Khóa vật lý 1-1 độc quyền • Tự hủy sau khi nhận (Burn-After-Read)</p>
                     </div>
                     <div class="launcher-box">
                         <label><strong>KẾT NỐI ĐẦU DÂY:</strong></label>
                         <div class="launcher-row">
                             <span class="url-slash">/</span>
-                            <input id="roomInput" value="1" placeholder="slug" autofocus autocomplete="off" />
+                            <input id="roomInput" placeholder="slug" autofocus autocomplete="off" />
                             <button id="btnOpenSender" class="btn-black">TX (PHÁT)</button>
                             <button id="btnOpenReceiver" class="btn-white">RX (NHẬN)</button>
                         </div>
                         <div class="quick-links">
-                            Mặc định: <a href="/1-s">/1-s (TX)</a> | <a href="/1-r">/1-r (RX)</a>
+                            Mặc định: <a id="quickTxLink" href="#">- (TX)</a> | <a id="quickRxLink" href="#">- (RX)</a>
                         </div>
                     </div>
                 </div>
@@ -136,7 +135,6 @@ Write-Host 'Hello from WireDrop' -ForegroundColor Green
                         </div>
                         <button id="btnCopyCheat" class="btn-black">COPY</button>
                     </div>
-                    <div class="rx-bar-note" id="cheatNote">Nhận và thực thi ngay lập tức qua pipe</div>
                 </div>
             </div>
         </main>
@@ -166,12 +164,9 @@ Write-Host 'Hello from WireDrop' -ForegroundColor Green
                 <!-- THANH THAO TÁC CỐ ĐỊNH Ở DƯỚI -->
                 <div class="rx-fixed-bar">
                     <div class="rx-bar-header">
-                        <span class="rx-title">BÊN NHẬN (RX):</span>
-                        <span class="rx-status-tag">[KẾT NỐI: HOẠT ĐỘNG]</span>
-                    </div>
-                    <div class="rx-bar-content">
-                        <div class="rx-code-box">
-                            <span>// Dữ liệu sẽ tự hủy khỏi RAM sau khi đọc hoặc tải về (Burn-After-Read)</span>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span class="rx-title">BÊN NHẬN (RX):</span>
+                            <span class="rx-status-tag">[KẾT NỐI: HOẠT ĐỘNG]</span>
                         </div>
                         <button id="btnCopyRecvText" class="btn-black">COPY DỮ LIỆU</button>
                     </div>
