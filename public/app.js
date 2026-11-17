@@ -11,7 +11,17 @@
     }
     const defaultSlug = generateSlug(4);
     let slug = defaultSlug, isSender = true, isHome = false, os = "linux", sse = null, saveTimer = null, typing = false;
-    const connId = "c_" + Math.random().toString(36).slice(2, 9) + Date.now().toString(36);
+
+    // Quản lý mã kết nối vật lý (Physical Connection ID) lưu theo phiên phòng/vai trò để F5 không bị khóa 409
+    function getConnId() {
+        const key = `wd_conn_${slug}_${isSender ? "s" : "r"}`;
+        let cid = sessionStorage.getItem(key);
+        if (!cid) {
+            cid = "c_" + Math.random().toString(36).slice(2, 9) + Date.now().toString(36);
+            sessionStorage.setItem(key, cid);
+        }
+        return cid;
+    }
 
     function showToast(msg) {
         const t = $("toast");
@@ -64,51 +74,82 @@
 
     function showLockout(msg) {
         $("lockoutTitle").textContent = (isSender ? "TX" : "RX") + " ĐANG BẬN (409)";
-        $("lockoutMsg").textContent = msg || "Đầu dây này đã có 1 kết nối khác cắm vào. WireDrop duy trì khóa 1-1.";
+        $("lockoutMsg").textContent = msg || "Đầu dây này đã có 1 kết nối khác cắm vào. Bấm [THỬ KẾT NỐI LẠI] để chuyển quyền cắm dây!";
         $("lockoutModal").style.display = "flex";
     }
 
-    function connectSSE() {
+    function connectSSE(force = false) {
         if (isHome) return;
         if (sse) { sse.close(); sse = null; }
         const role = isSender ? "sender" : "receiver";
-        fetch(`/${slug}/events?role=${role}&conn=${connId}&check=1`).then(res => {
+        const cid = getConnId();
+        const forceParam = force ? "&force=1" : "";
+        fetch(`/${slug}/events?role=${role}&conn=${cid}&check=1${forceParam}`).then(res => {
             if (res.status === 409) return res.json().then(d => showLockout(d.message));
             if (res.ok) {
                 $("lockoutModal").style.display = "none";
-                startSSE(role);
+                startSSE(role, cid, force);
             }
-        }).catch(() => startSSE(role));
+        }).catch(() => startSSE(role, cid, force));
     }
 
-    function startSSE(role) {
-        sse = new EventSource(`/${slug}/events?role=${role}&conn=${connId}`);
+    function startSSE(role, cid, force = false) {
+        if (sse) { sse.close(); sse = null; }
+        const forceParam = force ? "&force=1" : "";
+        sse = new EventSource(`/${slug}/events?role=${role}&conn=${cid}${forceParam}`);
         sse.addEventListener("init", e => {
             const d = JSON.parse(e.data);
-            setPairStatus(d.receiver_paired || d.paired);
+            setPairStatus(!!d.receiver_paired, !!d.sender_paired);
             renderPayload(d);
         });
-        sse.addEventListener("partner_paired", () => { setPairStatus(true); showToast("[RX ĐÃ KẾT NỐI]"); });
-        sse.addEventListener("partner_unpaired", () => setPairStatus(false));
+        sse.addEventListener("partner_paired", () => {
+            const ns = $("nodeSender");
+            setPairStatus(true, ns ? ns.textContent.includes("●") : true);
+            if (isSender) showToast("[RX ĐÃ KẾT NỐI]");
+        });
+        sse.addEventListener("partner_unpaired", () => {
+            const ns = $("nodeSender");
+            setPairStatus(false, ns ? ns.textContent.includes("●") : true);
+            if (isSender) showToast("[RX ĐÃ NGẮT]");
+        });
+        sse.addEventListener("sender_paired", () => {
+            const nr = $("nodeReceiver");
+            setPairStatus(nr ? nr.textContent.includes("●") : false, true);
+            if (!isSender) showToast("[TX ĐÃ KẾT NỐI]");
+        });
+        sse.addEventListener("sender_unpaired", () => {
+            const nr = $("nodeReceiver");
+            setPairStatus(nr ? nr.textContent.includes("●") : false, false);
+            if (!isSender) showToast("[TX ĐÃ RỜI DÂY]");
+        });
         sse.addEventListener("payload_updated", e => {
             const d = JSON.parse(e.data);
-            if (isSender && d.type === "file") showActiveFile(d.name, d.size);
-            if (!isSender) d.type === "text" ? showRecvText(d.content) : showRecvFile(d.name, d.size);
+            if (isSender) {
+                if (d.type === "file") {
+                    showActiveFile(d.name, d.size);
+                } else if (d.type === "text" && !typing) {
+                    $("senderTextarea").value = d.content || "";
+                }
+            }
+            if (!isSender) {
+                d.type === "text" ? showRecvText(d.content) : showRecvFile(d.name, d.size);
+            }
         });
         sse.addEventListener("payload_cleared", () => {
             if (!isSender) { showRecvEmpty(); showToast("[ĐÃ TỰ HỦY]"); }
         });
         sse.onerror = () => {
-            fetch(`/${slug}/events?role=${role}&conn=${connId}&check=1`).then(r => {
-                if (r.status === 409) { r.json().then(d => showLockout(d.message)); sse.close(); }
+            fetch(`/${slug}/events?role=${role}&conn=${cid}&check=1`).then(r => {
+                if (r.status === 409) { r.json().then(d => showLockout(d.message)); if (sse) sse.close(); }
             });
         };
     }
 
-    function setPairStatus(paired) {
-        const nr = $("nodeReceiver"), ub = $("btnUnpair");
-        if (nr) nr.textContent = paired ? "RX ●" : "RX ○";
-        if (ub) ub.style.display = (isSender && paired) ? "inline-block" : "none";
+    function setPairStatus(rxPaired, txPaired) {
+        const nr = $("nodeReceiver"), ns = $("nodeSender"), ub = $("btnUnpair");
+        if (nr) nr.textContent = rxPaired ? "RX ●" : "RX ○";
+        if (ns && typeof txPaired === "boolean") ns.textContent = txPaired ? "TX ●" : "TX ○";
+        if (ub) ub.style.display = (isSender && rxPaired) ? "inline-block" : "none";
     }
 
     function renderPayload(d) {
@@ -164,7 +205,7 @@
         $("recvFileSection").style.display = "flex";
         $("recvFileName").textContent = name;
         $("recvFileSize").textContent = fmtSize(size);
-        $("btnDownloadFile").href = `/${slug}-r?conn=${connId}`;
+        $("btnDownloadFile").href = `/${slug}-r?conn=${getConnId()}`;
         $("btnDownloadFile").download = name;
     }
 
@@ -184,13 +225,14 @@
         typing = true;
         clearTimeout(saveTimer);
         saveTimer = setTimeout(() => {
-            fetch(`/${slug}-s?conn=${connId}`, {
+            const cid = getConnId();
+            fetch(`/${slug}-s?conn=${cid}`, {
                 method: "POST",
                 headers: { "Content-Type": "text/plain; charset=utf-8" },
                 body: $("senderTextarea").value
             }).then(r => {
                 $("syncIndicator").textContent = r.ok ? "[ĐÃ LƯU ✓]" : (r.status === 409 ? "[BỊ KHÓA]" : "[LỖI]");
-                if (r.status === 409) showLockout("TX đang bị chiếm giữ.");
+                if (r.status === 409) showLockout("TX đang bị chiếm giữ. Bấm [THỬ KẾT NỐI LẠI] để cắm lại dây!");
             }).catch(() => $("syncIndicator").textContent = "[MẤT MẠNG]")
               .finally(() => setTimeout(() => typing = false, 300));
         }, 300);
@@ -201,9 +243,10 @@
         const fd = new FormData();
         fd.append("file", file);
         $("syncIndicator").textContent = "[NẠP...]";
-        fetch(`/${slug}-s?conn=${connId}`, { method: "POST", body: fd })
+        const cid = getConnId();
+        fetch(`/${slug}-s?conn=${cid}`, { method: "POST", body: fd })
             .then(r => {
-                if (r.status === 409) { showLockout("TX bị khóa."); throw new Error(); }
+                if (r.status === 409) { showLockout("TX đang bị chiếm giữ. Bấm [THỬ KẾT NỐI LẠI] để cắm lại dây!"); throw new Error(); }
                 return r.json();
             }).then(d => {
                 showActiveFile(d.name, d.size);
@@ -226,8 +269,8 @@
     }
 
     function detectRole() {
-        const path = location.pathname.replace(/^\/|\/$/g, "");
-        if (path === "" || location.hash === "#") {
+        const path = location.pathname.replace(/^\/|\/$/g, "").toLowerCase();
+        if (path === "") {
             isHome = true;
             document.title = "WireDrop - Web → Terminal Relay";
             $("homeView").style.display = "flex";
@@ -307,7 +350,7 @@
 
     $("btnCopyCheat").onclick = () => copyText($("cheatCode").textContent);
     $("btnCopyRecvText").onclick = () => copyText($("recvTextDisplay").querySelector("code").textContent);
-    $("btnRetryConn").onclick = connectSSE;
+    $("btnRetryConn").onclick = () => connectSSE(true);
     $("btnUnpair").onclick = () => {
         if (confirm("Mở khóa RX?")) fetch(`/${slug}/reset-receiver`, { method: "POST" }).then(() => showToast("[ĐÃ MỞ KHÓA RX]"));
     };
@@ -322,13 +365,13 @@
     });
 
     const openRoom = suf => {
-        const s = ($("roomInput").value || "").trim().replace(/[^a-zA-Z0-9_-]/g, "") || defaultSlug;
+        const s = ($("roomInput").value || "").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "") || defaultSlug;
         location.href = `/${s}-${suf}`;
     };
     $("btnOpenSender").onclick = () => openRoom("s");
     $("btnOpenReceiver").onclick = () => openRoom("r");
     $("roomInput").oninput = () => {
-        const s = ($("roomInput").value || "").trim().replace(/[^a-zA-Z0-9_-]/g, "") || defaultSlug;
+        const s = ($("roomInput").value || "").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "") || defaultSlug;
         updateHomeQuickLinks(s);
     };
     $("roomInput").onkeydown = e => { if (e.key === "Enter") openRoom("s"); };

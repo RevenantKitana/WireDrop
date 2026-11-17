@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-const Version = "v0.5.2"
+const Version = "v0.5.3"
 const defaultSlugChars = "abcdefghijklmnopqrstuvwxyz0123456789"
 
 func randomSlug(n int) string {
@@ -130,7 +130,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 
 // roomDispatcher điều phối linh hoạt các request /{room} dựa vào hậu tố -s hoặc -r
 func roomDispatcher(w http.ResponseWriter, r *http.Request) {
-	room := r.PathValue("room")
+	room := strings.ToLower(r.PathValue("room"))
 
 	// Phục vụ file tĩnh nếu bị lọt
 	if room == "style.css" {

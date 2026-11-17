@@ -383,23 +383,21 @@ func runTunnelFlow(exeDir string, cfg EnvConfig, isQuick bool) {
 	var cfCmd *exec.Cmd
 	if isQuick {
 		fmt.Println("[*] Dang mo duong ham Cloudflare Quick Tunnel (protocol: http2)...")
-		cfCmd = exec.Command(cfBin, "tunnel", "--protocol", "http2", "--url", "http://localhost:"+cfg.Port)
+		cfCmd = exec.Command(cfBin, "tunnel", "--no-autoupdate", "--protocol", "http2", "--url", "http://127.0.0.1:"+cfg.Port)
 	} else {
 		fmt.Println("[*] Dang ket noi Cloudflare Named Tunnel theo Token (protocol: http2)...")
-		cfCmd = exec.Command(cfBin, "tunnel", "--protocol", "http2", "run", "--token", cfg.CloudflareToken)
+		cfCmd = exec.Command(cfBin, "tunnel", "--no-autoupdate", "--protocol", "http2", "run", "--token", cfg.CloudflareToken)
 	}
 
-	// Đọc stderr/stdout của cloudflared để lấy URL
-	cfPipe, err := cfCmd.StderrPipe()
-	if err != nil {
-		fmt.Printf("[X] Khong the doc log Cloudflare: %v\n", err)
-		_ = srv.Close()
-		return
-	}
-	cfCmd.Stdout = cfCmd.Stderr
+	// Đọc cả stdout và stderr của cloudflared qua io.Pipe để lấy URL (bất kể phiên bản cloudflared ghi vào kênh nào)
+	pr, pw := io.Pipe()
+	cfCmd.Stdout = pw
+	cfCmd.Stderr = pw
 
 	if err := cfCmd.Start(); err != nil {
 		fmt.Printf("[X] Khong the khoi chay Cloudflare: %v\n", err)
+		_ = pw.Close()
+		_ = pr.Close()
 		_ = srv.Close()
 		return
 	}
@@ -412,13 +410,16 @@ func runTunnelFlow(exeDir string, cfg EnvConfig, isQuick bool) {
 	cfExitChan := make(chan error, 1)
 
 	go func() {
-		cfExitChan <- cfCmd.Wait()
+		err := cfCmd.Wait()
+		_ = pw.Close()
+		cfExitChan <- err
 	}()
 
 	// Quét log tìm URL
 	go func() {
+		defer pr.Close()
 		re := regexp.MustCompile(`https://[-a-zA-Z0-9.]*\.trycloudflare\.com`)
-		scanner := bufio.NewScanner(cfPipe)
+		scanner := bufio.NewScanner(pr)
 		for scanner.Scan() {
 			line := scanner.Text()
 			if isQuick {

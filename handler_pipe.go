@@ -41,8 +41,9 @@ func getConnID(r *http.Request) string {
 
 // handleSender xử lý Đầu Phát (*-s): Chỉ dành riêng cho Master A
 func handleSender(w http.ResponseWriter, r *http.Request) {
-	slug := r.PathValue("room")
+	slug := strings.ToLower(r.PathValue("room"))
 	slug = strings.TrimSuffix(slug, "-s")
+	slug = strings.TrimSuffix(slug, "-r")
 	if slug == "" {
 		http.NotFound(w, r)
 		return
@@ -131,7 +132,12 @@ func handleSender(w http.ResponseWriter, r *http.Request) {
 			room.SetFile(header.Filename, int64(len(data)), data, "")
 
 			// Báo cho Web A và B biết slot đã đổi sang File
-			room.BroadcastSSE("payload_updated", fmt.Sprintf(`{"type":"file","name":"%s","size":%d}`, header.Filename, len(data)))
+			fileEvt, _ := json.Marshal(map[string]interface{}{
+				"type": "file",
+				"name": header.Filename,
+				"size": len(data),
+			})
+			room.BroadcastSSE("payload_updated", string(fileEvt))
 
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{
@@ -151,6 +157,7 @@ func handleSender(w http.ResponseWriter, r *http.Request) {
 			// Nhận file nhị phân
 			const ramThreshold = 15 * 1024 * 1024
 			contentLength := r.ContentLength
+			var fileSize int64
 
 			if contentLength > 0 && contentLength <= ramThreshold {
 				data, err := io.ReadAll(r.Body)
@@ -158,7 +165,8 @@ func handleSender(w http.ResponseWriter, r *http.Request) {
 					http.Error(w, "Upload error", http.StatusBadRequest)
 					return
 				}
-				room.SetFile(filename, int64(len(data)), data, "")
+				fileSize = int64(len(data))
+				room.SetFile(filename, fileSize, data, "")
 			} else {
 				// File lớn > 15MB: Ghi tạm vào /tmp
 				tmpFile, err := os.CreateTemp("", "tc_pipe_*")
@@ -174,10 +182,16 @@ func handleSender(w http.ResponseWriter, r *http.Request) {
 					http.Error(w, "Stream upload failed", http.StatusBadRequest)
 					return
 				}
-				room.SetFile(filename, written, nil, tmpFile.Name())
+				fileSize = written
+				room.SetFile(filename, fileSize, nil, tmpFile.Name())
 			}
 
-			room.BroadcastSSE("payload_updated", fmt.Sprintf(`{"type":"file","name":"%s"}`, filename))
+			fileEvt, _ := json.Marshal(map[string]interface{}{
+				"type": "file",
+				"name": filename,
+				"size": fileSize,
+			})
+			room.BroadcastSSE("payload_updated", string(fileEvt))
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			_, _ = fmt.Fprintf(w, "FILE_LOADED: %s\n", filename)
 			return
@@ -194,7 +208,11 @@ func handleSender(w http.ResponseWriter, r *http.Request) {
 		cleanText := bytes.ReplaceAll(body, []byte("\r\n"), []byte("\n"))
 		room.SetText(string(cleanText))
 
-		room.BroadcastSSE("payload_updated", fmt.Sprintf(`{"type":"text","content":"%s"}`, string(cleanText)))
+		payloadJSON, _ := json.Marshal(map[string]interface{}{
+			"type":    "text",
+			"content": string(cleanText),
+		})
+		room.BroadcastSSE("payload_updated", string(payloadJSON))
 
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		_, _ = w.Write([]byte("SAVED\n"))
@@ -206,10 +224,19 @@ func handleSender(w http.ResponseWriter, r *http.Request) {
 
 // handleReceiver xử lý Đầu Nhận (*-r): Dành cho Worker B (Thuần túy Read-Only)
 func handleReceiver(w http.ResponseWriter, r *http.Request) {
-	slug := r.PathValue("room")
+	slug := strings.ToLower(r.PathValue("room"))
 	slug = strings.TrimSuffix(slug, "-r")
+	slug = strings.TrimSuffix(slug, "-s")
 	if slug == "" {
 		http.NotFound(w, r)
+		return
+	}
+
+	connID := getConnID(r)
+
+	// 1. Nếu mở bằng Trình duyệt để xem trang (không truyền connID): Luôn phục vụ Web SPA ở chế độ Receiver ngay cả khi phòng chưa nạp dữ liệu
+	if r.Method == http.MethodGet && !isCLI(r) && connID == "" {
+		serveIndexHTML(w, r)
 		return
 	}
 
@@ -222,14 +249,6 @@ func handleReceiver(w http.ResponseWriter, r *http.Request) {
 	}
 	room.Touch()
 
-	connID := getConnID(r)
-
-	// 1. Nếu mở bằng Trình duyệt để xem trang (không truyền connID): Phục vụ Web SPA ở chế độ Receiver
-	if r.Method == http.MethodGet && !isCLI(r) && connID == "" {
-		serveIndexHTML(w, r)
-		return
-	}
-
 	// 2. Kiểm tra Khóa Kết Nối Vật Lý cho Đầu Nhận
 	allowed, errMsg := room.CheckReceiverAuth(connID)
 	if !allowed {
@@ -240,7 +259,7 @@ func handleReceiver(w http.ResponseWriter, r *http.Request) {
 	// 3. Kiểm tra nếu Máy B muốn mở Live Pipe (curl -sN domain.com/1-r | bash)
 	if r.URL.Query().Get("live") == "1" || strings.Contains(r.Header.Get("Accept"), "text/event-stream") || r.Header.Get("Range") == "live" {
 		streamConnID := "cli_stream_" + fmt.Sprintf("%d", time.Now().UnixNano())
-		ok, lockErr := room.AcquireReceiver(streamConnID)
+		ok, lockErr := room.AcquireReceiver(streamConnID, false)
 		if !ok {
 			http.Error(w, lockErr, http.StatusConflict)
 			return
@@ -361,7 +380,7 @@ func handleLivePipeStream(w http.ResponseWriter, r *http.Request, room *RoomStat
 
 // handleRoomEvents phát luồng SSE cập nhật trạng thái và duy trì khóa kết nối cho Web UI A và B
 func handleRoomEvents(w http.ResponseWriter, r *http.Request) {
-	slug := r.PathValue("room")
+	slug := strings.ToLower(r.PathValue("room"))
 	slug = strings.TrimSuffix(slug, "-s")
 	slug = strings.TrimSuffix(slug, "-r")
 
@@ -370,35 +389,38 @@ func handleRoomEvents(w http.ResponseWriter, r *http.Request) {
 
 	role := strings.ToLower(r.URL.Query().Get("role"))
 	connID := getConnID(r)
+	force := r.URL.Query().Get("force") == "1"
 
 	// Chế độ Pre-check kiểm tra kết nối có bị chiếm hay không (dành cho Web trước khi mở SSE)
 	if r.URL.Query().Get("check") == "1" {
 		w.Header().Set("Content-Type", "application/json")
-		if role == "sender" {
-			room.RLock()
-			busy := (room.SenderConn != nil && room.SenderConn.ID != connID)
-			room.RUnlock()
-			if busy {
-				w.WriteHeader(http.StatusConflict)
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{
-					"error":   "line_busy",
-					"role":    "sender",
-					"message": "Đầu phát (*-s) đang có một cửa sổ khác chiếm giữ. Sợi dây này chỉ cho phép duy nhất 1 cửa sổ phát!",
-				})
-				return
-			}
-		} else if role == "receiver" {
-			room.RLock()
-			busy := (room.ReceiverConn != nil && room.ReceiverConn.ID != connID)
-			room.RUnlock()
-			if busy {
-				w.WriteHeader(http.StatusConflict)
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{
-					"error":   "line_busy",
-					"role":    "receiver",
-					"message": "Đầu nhận (*-r) đang có một cửa sổ hoặc kết nối khác chiếm giữ. Sợi dây này chỉ cho phép duy nhất 1 kết nối nhận!",
-				})
-				return
+		if !force {
+			if role == "sender" {
+				room.RLock()
+				busy := (room.SenderConn != nil && room.SenderConn.ID != connID)
+				room.RUnlock()
+				if busy {
+					w.WriteHeader(http.StatusConflict)
+					_ = json.NewEncoder(w).Encode(map[string]interface{}{
+						"error":   "line_busy",
+						"role":    "sender",
+						"message": "Đầu phát (*-s) đang có một cửa sổ khác chiếm giữ. Bấm [THỬ KẾT NỐI LẠI] để cắm lại dây vào cửa sổ này!",
+					})
+					return
+				}
+			} else if role == "receiver" {
+				room.RLock()
+				busy := (room.ReceiverConn != nil && room.ReceiverConn.ID != connID)
+				room.RUnlock()
+				if busy {
+					w.WriteHeader(http.StatusConflict)
+					_ = json.NewEncoder(w).Encode(map[string]interface{}{
+						"error":   "line_busy",
+						"role":    "receiver",
+						"message": "Đầu nhận (*-r) đang có một cửa sổ khác chiếm giữ. Bấm [THỬ KẾT NỐI LẠI] để cắm lại dây vào cửa sổ này!",
+					})
+					return
+				}
 			}
 		}
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
@@ -416,7 +438,7 @@ func handleRoomEvents(w http.ResponseWriter, r *http.Request) {
 		if connID == "" {
 			connID = fmt.Sprintf("sender_%d", time.Now().UnixNano())
 		}
-		ok, errMsg := room.AcquireSender(connID)
+		ok, errMsg := room.AcquireSender(connID, force)
 		if !ok {
 			http.Error(w, errMsg, http.StatusConflict)
 			return
@@ -426,7 +448,7 @@ func handleRoomEvents(w http.ResponseWriter, r *http.Request) {
 		if connID == "" {
 			connID = fmt.Sprintf("receiver_%d", time.Now().UnixNano())
 		}
-		ok, errMsg := room.AcquireReceiver(connID)
+		ok, errMsg := room.AcquireReceiver(connID, force)
 		if !ok {
 			http.Error(w, errMsg, http.StatusConflict)
 			return
@@ -435,9 +457,15 @@ func handleRoomEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Cache-Control", "no-cache, no-transform")
 	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.Header().Set("Content-Encoding", "none")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	// Gửi ngay 2KB padding để phá bộ đệm của Cloudflare Edge tức thì
+	_, _ = fmt.Fprintf(w, ": %s\n\n", strings.Repeat(" ", 2048))
+	flusher.Flush()
 
 	sseChan := room.SubscribeSSE()
 	defer room.UnsubscribeSSE(sseChan)
@@ -483,7 +511,7 @@ func handleRoomEvents(w http.ResponseWriter, r *http.Request) {
 
 // handleResetReceiver giải phóng Máy B khỏi đầu nhận
 func handleResetReceiver(w http.ResponseWriter, r *http.Request) {
-	slug := r.PathValue("room")
+	slug := strings.ToLower(r.PathValue("room"))
 	slug = strings.TrimSuffix(slug, "-s")
 	slug = strings.TrimSuffix(slug, "-r")
 

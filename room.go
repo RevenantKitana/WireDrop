@@ -235,22 +235,18 @@ func (r *RoomState) ClearSlot() {
 // QUẢN LÝ KHÓA KẾT NỐI VẬT LÝ (PHYSICAL CONNECTION LOCK)
 // =========================================================================
 
-// AcquireSender cố gắng chiếm giữ đầu phát (*-s). Trả về false nếu đã có kết nối khác đang giữ.
-func (r *RoomState) AcquireSender(connID string) (bool, string) {
+// AcquireSender cố gắng chiếm giữ đầu phát (*-s). Hỗ trợ cờ force để cướp quyền nếu tab cũ bị treo.
+func (r *RoomState) AcquireSender(connID string, force bool) (bool, string) {
 	r.Lock()
 	defer r.Unlock()
 
-	if r.SenderConn == nil {
+	if r.SenderConn == nil || r.SenderConn.ID == connID || force {
 		r.SenderConn = &ActiveConn{
 			ID:          connID,
 			ConnectedAt: time.Now(),
 		}
 		r.broadcastSSEInternal("sender_paired", connID)
 		return true, ""
-	}
-
-	if r.SenderConn.ID == connID {
-		return true, "" // Cùng 1 kết nối tái kết nối
 	}
 
 	return false, "Sender end (*-s) is already held by another active window/connection. Line busy."
@@ -269,36 +265,27 @@ func (r *RoomState) ReleaseSender(connID string) {
 
 // CheckSenderAuth kiểm tra quyền gửi dữ liệu vào đầu phát (*-s)
 func (r *RoomState) CheckSenderAuth(connID string) (bool, string) {
-	r.RLock()
-	defer r.RUnlock()
-
-	if r.SenderConn == nil {
-		// Chưa có cửa sổ Web nào mở giữ đầu phát -> Cho phép (ví dụ CLI post độc lập)
-		return true, ""
-	}
-	if r.SenderConn.ID == connID {
-		// Chính là cửa sổ Web đang giữ đầu phát hợp lệ
-		return true, ""
-	}
-	return false, "Sender end (*-s) is currently held by an active connection (Web window). Close web window before using CLI or another window."
-}
-
-// AcquireReceiver cố gắng chiếm giữ đầu nhận (*-r). Trả về false nếu đã có kết nối khác đang giữ.
-func (r *RoomState) AcquireReceiver(connID string) (bool, string) {
 	r.Lock()
 	defer r.Unlock()
 
-	if r.ReceiverConn == nil {
+	if connID != "" && r.SenderConn != nil {
+		r.SenderConn.ID = connID
+	}
+	return true, ""
+}
+
+// AcquireReceiver cố gắng chiếm giữ đầu nhận (*-r). Hỗ trợ cờ force để cướp quyền nếu tab cũ bị treo.
+func (r *RoomState) AcquireReceiver(connID string, force bool) (bool, string) {
+	r.Lock()
+	defer r.Unlock()
+
+	if r.ReceiverConn == nil || r.ReceiverConn.ID == connID || force {
 		r.ReceiverConn = &ActiveConn{
 			ID:          connID,
 			ConnectedAt: time.Now(),
 		}
 		r.broadcastSSEInternal("partner_paired", connID)
 		return true, ""
-	}
-
-	if r.ReceiverConn.ID == connID {
-		return true, "" // Cùng 1 kết nối
 	}
 
 	return false, "Receiver end (*-r) is already held by another active window/connection. Line busy."
@@ -329,15 +316,8 @@ func (r *RoomState) CheckReceiverAuth(connID string) (bool, string) {
 	r.RLock()
 	defer r.RUnlock()
 
-	if r.ReceiverConn == nil {
-		// Chưa có kết nối nào giữ đầu nhận -> Cho phép CLI cắm vào lấy dữ liệu
-		return true, ""
-	}
-	if r.ReceiverConn.ID == connID {
-		// Chính là kết nối Web/CLI đang giữ đầu nhận hợp lệ
-		return true, ""
-	}
-	return false, "Receiver end (*-r) is currently held by an active connection (Web window or CLI stream). Close it before using another connection."
+	// Luôn cho phép lấy dữ liệu khi đọc một lần (CLI hoặc Web đã ghép nối)
+	return true, ""
 }
 
 // =========================================================================
