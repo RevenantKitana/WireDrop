@@ -1,6 +1,6 @@
 /* ==========================================================================
-   WireDrop - Balanced Minimalist Monochrome Layout
-   Clean 2-Column Grid • Zero Radius • Locked Proportions (Zero Jitter)
+   WireDrop - Unified Form & Fixed Bottom RX Bar Layout
+   Zero Jitter • Single Form Inheritance • Responsive Monospace
    ========================================================================== */
 
 * { box-sizing: border-box; margin: 0; padding: 0; border-radius: 0 !important; }
@@ -15,7 +15,7 @@ body {
 }
 
 .wrap {
-    max-width: 920px;
+    max-width: 900px;
     margin: 0 auto;
     padding: 18px;
     display: flex;
@@ -67,7 +67,7 @@ body {
 .header-divider {
     border-bottom: 2px solid #000;
     margin-top: 4px;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
 }
 
 /* BUTTONS */
@@ -83,20 +83,28 @@ button, .btn-black, .btn-white {
 .btn-black {
     background: #000;
     color: #fff;
-    padding: 6px 16px;
+    padding: 7px 18px;
     font-weight: bold;
 }
 .btn-black:hover { background: #222; }
 .btn-white {
     background: #fff;
     color: #000;
-    padding: 6px 14px;
+    padding: 7px 16px;
 }
 .btn-white:hover { background: #eee; }
 
 /* WORKSPACE & MODE BAR */
-.workspace { display: flex; flex-direction: column; gap: 10px; }
-.mode-bar { display: flex; align-items: center; gap: 8px; }
+.workspace {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.mode-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
 .mode-btn {
     background: #fff;
     color: #000;
@@ -115,282 +123,212 @@ button, .btn-black, .btn-white {
     margin-left: 6px;
 }
 
-/* DUAL-PANE CORE GRID - CỐ ĐỊNH KÍCH THƯỚC TUYỆT ĐỐI */
-.dual-box {
+/* 1. KHUNG FORM CỐ ĐỊNH CHUNG (INHERITED SINGLE FORM) */
+.payload-frame {
     border: 1px solid #000;
     background: #fff;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    height: 380px; /* Khóa cố định chiều cao - Triệt tiêu 100% sự biến thiên */
+    height: 280px; /* Khóa cố định chiều cao tuyệt đối */
+    width: 100%;
+    position: relative;
     overflow: hidden;
+    box-sizing: border-box;
 }
 
-/* LEFT COLUMN */
-.pane-left {
-    border-right: 1px solid #000;
+.form-pane {
+    width: 100%;
+    height: 100%;
     display: flex;
     flex-direction: column;
-    background: #fff;
-    height: 100%;
-    overflow: hidden;
+    box-sizing: border-box;
 }
 
-/* 1. TEXT MODE EDITOR */
-.editor-pane {
-    flex: 1;
-    display: flex;
-    height: 100%;
-}
+/* SOẠN THẢO TEXT */
 #senderTextarea {
-    flex: 1;
     width: 100%;
     height: 100%;
     border: none;
-    padding: 14px;
+    padding: 16px;
     font: inherit;
     font-size: 13px;
     line-height: 1.55;
     outline: none;
-    resize: none; /* Khắc phục lỗi co giãn đè vách ngăn */
+    resize: none;
     background: #fff;
     overflow-y: auto;
-}
-
-/* 2. FILE MODE - ĐỒNG NHẤT KHUÔN KHỔ 100% */
-.dropzone-pane {
-    flex: 1;
-    padding: 14px;
-    display: flex;
-    flex-direction: column;
-    height: 100%;
     box-sizing: border-box;
 }
-.dropzone-box {
-    flex: 1;
+
+/* KHUNG CHẾ ĐỘ FILE - KẾ THỪA CÙNG KÍCH THƯỚC */
+.file-state-box {
+    width: 100%;
     height: 100%;
-    border: 1px dashed #000;
-    padding: 24px 18px;
-    text-align: center;
-    cursor: pointer;
-    background: #fafafa;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    transition: background 0.15s ease;
+    padding: 24px;
     box-sizing: border-box;
-}
-.dropzone-box:hover, .dropzone-box.dragover { background: #eee; }
-.drop-icon { font-size: 22px; font-weight: bold; }
-.drop-title { font-size: 13px; }
-.drop-sub { font-size: 12px; color: #555; }
-.drop-hint {
-    font-size: 11px;
-    color: #777;
-    margin-top: 6px;
-    border-top: 1px dashed #ccc;
-    padding-top: 6px;
-    width: 85%;
-}
-
-.file-loaded-card {
-    flex: 1;
-    height: 100%;
-    border: 1px solid #000;
-    padding: 16px;
     background: #fafafa;
-    display: flex;
-    flex-direction: column;
+    gap: 8px;
+    text-align: center;
+}
+#dropzoneBox {
+    cursor: pointer;
+    border: 1px dashed #000;
+    margin: 12px;
+    width: calc(100% - 24px);
+    height: calc(100% - 24px);
+}
+#dropzoneBox:hover, #dropzoneBox.dragover { background: #eee; }
+.drop-icon { font-size: 26px; font-weight: bold; }
+.drop-title { font-size: 13px; }
+.drop-hint { font-size: 11px; color: #777; margin-top: 4px; }
+
+/* FILE ĐÃ SẴN SÀNG */
+.file-ready {
+    align-items: stretch;
     justify-content: space-between;
-    box-sizing: border-box;
+    text-align: left;
+    background: #fafafa;
+    border: 1px solid #000;
+    margin: 12px;
+    width: calc(100% - 24px);
+    height: calc(100% - 24px);
+    padding: 18px 24px;
 }
 .file-card-tag {
     font-size: 11px;
     font-weight: bold;
-    color: #000;
     border-bottom: 1px solid #000;
     padding-bottom: 6px;
 }
-.file-card-body {
+.file-card-info {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
     font-size: 12px;
     margin: auto 0;
 }
-.file-meta-row {
+.file-row {
     display: flex;
     align-items: baseline;
-    gap: 10px;
+    gap: 12px;
 }
-.meta-label { color: #666; min-width: 80px; }
-.meta-desc { color: #333; line-height: 1.4; }
-.file-card-footer {
+.file-lbl { min-width: 80px; color: #666; }
+.file-note { color: #333; }
+.file-card-action {
     display: flex;
     justify-content: flex-end;
     border-top: 1px dashed #ccc;
-    padding-top: 8px;
+    padding-top: 10px;
 }
 
-/* RIGHT COLUMN */
-.pane-right {
-    padding: 16px;
+/* 2. THANH LỆNH RX CỐ ĐỊNH Ở PHÍA DƯỚI */
+.rx-fixed-bar {
+    border: 1px solid #000;
+    background: #fafafa;
+    padding: 14px 18px;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
-    background: #fff;
-    height: 100%;
+    gap: 10px;
     box-sizing: border-box;
-    overflow: hidden;
+    width: 100%;
 }
-.rx-header-row {
+.rx-bar-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 8px;
 }
 .rx-title {
     font-weight: bold;
-    font-size: 13px;
+    font-size: 12px;
     letter-spacing: 0.5px;
+}
+.rx-status-tag {
+    font-size: 11px;
+    font-weight: bold;
 }
 .os-tabs { display: flex; gap: 4px; }
 .os-tab { padding: 4px 10px; font-size: 11px; }
 .os-tab.active { background: #000; color: #fff; font-weight: bold; }
 
-/* RX COMMAND CARD (GỌN GÀNG, ĐIỂM NHẤN RÕ RÀNG) */
-.rx-cmd-card {
-    border: 1px solid #000;
-    padding: 14px;
-    background: #fafafa;
+.rx-bar-content {
     display: flex;
-    flex-direction: column;
-    gap: 8px;
+    align-items: center;
+    gap: 10px;
+}
+.rx-code-box {
     flex: 1;
-    justify-content: center;
-    margin: 10px 0;
-}
-.cmd-label {
-    font-size: 11px;
-    color: #666;
-}
-.cmd-code-wrapper {
     background: #fff;
     border: 1px solid #ccc;
-    padding: 8px 10px;
+    padding: 8px 12px;
     word-break: break-all;
 }
-.cmd-code-wrapper code {
+.rx-code-box code {
     font: inherit;
     font-weight: bold;
     font-size: 13px;
     color: #000;
 }
-.cmd-note {
+.rx-bar-note {
     font-size: 11px;
-    color: #777;
-}
-
-.rx-footer-row {
-    display: flex;
-    justify-content: flex-end;
+    color: #666;
 }
 
 /* RECEIVER VIEW (RX) */
-.recv-pane {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    padding: 14px;
-    height: 100%;
-    overflow: hidden;
-}
 .recv-pane pre {
-    flex: 1;
+    width: 100%;
     height: 100%;
     overflow-y: auto;
     white-space: pre-wrap;
     word-break: break-all;
     font: inherit;
     font-weight: bold;
+    padding: 16px;
     background: #fff;
     border: none;
     line-height: 1.5;
-}
-.file-recv {
-    justify-content: center;
-    align-items: center;
-}
-.file-recv-box {
-    border: 1px solid #000;
-    padding: 24px 20px;
-    text-align: center;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    width: 100%;
-    background: #fafafa;
+    box-sizing: border-box;
 }
 
-/* HOME VIEW (2 CỘT ĐỒNG NHẤT) */
-.home-pane {
-    padding: 20px;
+/* HOME VIEW */
+.home-hero-box {
+    padding: 24px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    gap: 16px;
-    height: 100%;
 }
 .home-brand h2 { font-size: 18px; letter-spacing: 1px; }
-.brand-sub { font-size: 12px; font-weight: bold; margin-top: 2px; }
-.brand-desc { font-size: 12px; color: #555; margin-top: 6px; }
+.brand-desc { font-size: 12px; color: #555; margin-top: 4px; }
 .launcher-box { display: flex; flex-direction: column; gap: 8px; }
-.launcher-input-row {
+.launcher-row {
     display: flex;
     align-items: center;
-    gap: 6px;
-    border: 1px solid #000;
-    padding: 4px 8px;
-    background: #fff;
+    gap: 8px;
 }
 .url-slash { font-weight: bold; font-size: 16px; }
-.launcher-input-row input {
-    border: none;
+.launcher-row input {
     flex: 1;
+    border: 1px solid #000;
+    padding: 7px 10px;
     font: inherit;
     outline: none;
-    padding: 4px 0;
 }
-.launcher-btn-row { display: flex; gap: 8px; }
-.launcher-btn-row .btn-black, .launcher-btn-row .btn-white { flex: 1; text-align: center; }
-.quick-links { font-size: 11px; color: #555; margin-top: 4px; }
+.quick-links { font-size: 11px; color: #555; }
 .quick-links a { color: #000; }
 
-.home-guide-pane {
-    padding: 20px;
-    gap: 12px;
-    height: 100%;
-    justify-content: space-between;
+.home-guide-bar {
+    background: #fff;
 }
-.guide-steps {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+.home-guide-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
     font-size: 12px;
-}
-.guide-item p { color: #444; margin-top: 2px; }
-.code-mini {
-    background: #fafafa;
-    border: 1px solid #ddd;
-    padding: 6px 8px;
     margin-top: 4px;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    font-size: 11px;
 }
-.code-mini code { font-weight: bold; }
+.guide-col p { color: #444; margin-top: 2px; }
+.guide-col code { font-weight: bold; }
 
 /* FOOTER & MODALS */
 .app-footer {
@@ -415,18 +353,9 @@ button, .btn-black, .btn-white {
 }
 #toast.show { opacity: 1; }
 
-/* RESPONSIVE */
-@media (max-width: 720px) {
-    .dual-box {
-        grid-template-columns: 1fr;
-        height: auto;
-    }
-    .pane-left {
-        border-right: none;
-        border-bottom: 1px solid #000;
-        height: 280px;
-    }
-    .pane-right {
-        height: auto;
-    }
+@media (max-width: 640px) {
+    .rx-bar-content { flex-direction: column; align-items: stretch; }
+    .rx-bar-content .btn-black { width: 100%; text-align: center; }
+    .launcher-row { flex-wrap: wrap; }
+    .launcher-row input { width: 100%; }
 }

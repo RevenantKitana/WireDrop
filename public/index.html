@@ -23,23 +23,20 @@
         </header>
         <div class="header-divider"></div>
 
-        <!-- 1. HOME VIEW (/ hoặc /#) - ĐỒNG BỘ 2 CỘT -->
+        <!-- 1. HOME VIEW (/ hoặc /#) -->
         <main id="homeView" style="display:none;">
-            <div class="dual-box">
-                <!-- CỘT TRÁI: KHỞI TẠO ĐẦU DÂY -->
-                <div class="pane-left home-pane">
+            <div class="workspace">
+                <!-- KHỞI TẠO ĐẦU DÂY -->
+                <div class="payload-frame home-hero-box">
                     <div class="home-brand">
-                        <h2>WIREDROP</h2>
-                        <p class="brand-sub">INSTANT WEB → TERMINAL RELAY</p>
-                        <p class="brand-desc">Khóa vật lý 1-1 • Tự hủy sau khi nhận (Burn-After-Read)</p>
+                        <h2>WIREDROP // WEB → TERMINAL RELAY</h2>
+                        <p class="brand-desc">Khóa vật lý 1-1 độc quyền • Tự hủy sau khi nhận (Burn-After-Read)</p>
                     </div>
                     <div class="launcher-box">
-                        <label><strong>KẾT NỐI ĐẦU DÂY (SLUG):</strong></label>
-                        <div class="launcher-input-row">
+                        <label><strong>KẾT NỐI ĐẦU DÂY:</strong></label>
+                        <div class="launcher-row">
                             <span class="url-slash">/</span>
                             <input id="roomInput" value="1" placeholder="slug" autofocus autocomplete="off" />
-                        </div>
-                        <div class="launcher-btn-row">
                             <button id="btnOpenSender" class="btn-black">TX (PHÁT)</button>
                             <button id="btnOpenReceiver" class="btn-white">RX (NHẬN)</button>
                         </div>
@@ -49,33 +46,28 @@
                     </div>
                 </div>
 
-                <!-- CỘT PHẢI: HƯỚNG DẪN 3 BƯỚC CÂN ĐỐI -->
-                <div class="pane-right home-guide-pane">
-                    <span class="rx-title">HƯỚNG DẪN NHANH:</span>
-                    <div class="guide-steps">
-                        <div class="guide-item">
+                <!-- HƯỚNG DẪN 3 BƯỚC CỐ ĐỊNH PHÍA DƯỚI -->
+                <div class="rx-fixed-bar home-guide-bar">
+                    <span class="rx-title">HƯỚNG DẪN 3 BƯỚC:</span>
+                    <div class="home-guide-grid">
+                        <div class="guide-col">
                             <strong>[1. TX: PHÁT]</strong>
-                            <p>Mở <code>/:room-s</code> trên trình duyệt. Dán kịch bản shell hoặc nạp 1 file vào slot.</p>
+                            <p>Mở <code>/:room-s</code>, dán kịch bản shell hoặc nạp 1 file.</p>
                         </div>
-                        <div class="guide-item">
+                        <div class="guide-col">
                             <strong>[2. RX: NHẬN]</strong>
-                            <p>1 dòng lệnh trên Terminal máy đích:</p>
-                            <div class="code-mini">
-                                <div>WIN: <code>irm domain/1-r | iex</code></div>
-                                <div>LNX: <code>curl -sL domain/1-r | sh</code></div>
-                                <div>BIN: <code>curl -sLJO domain/1-r</code></div>
-                            </div>
+                            <p>1 dòng Terminal: <code>curl -sL domain/1-r | sh</code> (Win: <code>irm ... | iex</code>)</p>
                         </div>
-                        <div class="guide-item">
+                        <div class="guide-col">
                             <strong>[3. AN TOÀN]</strong>
-                            <p>Đúng 1 kết nối mỗi đầu. Đọc xong xóa sạch khỏi RAM.</p>
+                            <p>Đúng 1 kết nối mỗi đầu. Đọc xong xóa trắng khỏi RAM.</p>
                         </div>
                     </div>
                 </div>
             </div>
         </main>
 
-        <!-- 2. SENDER VIEW (*-s) - CÂN ĐỐI CẢ TEXT VÀ FILE -->
+        <!-- 2. SENDER VIEW (*-s) - CÙNG 1 FORM CỐ ĐỊNH, LỆNH RX Ở DƯỚI -->
         <main id="senderView" style="display:none;">
             <div class="workspace">
                 <!-- MODE BAR (VĂN BẢN | FILE | [ĐÃ LƯU ✓]) -->
@@ -85,73 +77,66 @@
                     <span id="syncIndicator" class="sync-text">[ĐÃ LƯU ✓]</span>
                 </div>
 
-                <!-- DUAL-PANE BOX (BỐ CỤC 2 CỘT CHUẨN) -->
-                <div class="dual-box">
-                    <!-- CỘT TRÁI: VĂN BẢN HOẶC FILE DROPZONE -->
-                    <div class="pane-left">
-                        <!-- CHẾ ĐỘ VĂN BẢN -->
-                        <div id="editorContainer" class="editor-pane">
-                            <textarea id="senderTextarea" spellcheck="false" placeholder="# Nhập lệnh shell,&#10;script..."></textarea>
+                <!-- CÙNG 1 FORM GIAO DIỆN CỐ ĐỊNH (ZERO VARIATION) -->
+                <div class="payload-frame">
+                    <!-- 1. CHẾ ĐỘ VĂN BẢN -->
+                    <div id="editorContainer" class="form-pane">
+                        <textarea id="senderTextarea" spellcheck="false" placeholder="# Nhập lệnh shell, script...
+Write-Host 'Hello from WireDrop' -ForegroundColor Green
+"></textarea>
+                    </div>
+
+                    <!-- 2. CHẾ ĐỘ FILE (KẾ THỪA TRỌN VẸN CÙNG FORM) -->
+                    <div id="fileDropzone" class="form-pane" style="display:none;">
+                        <!-- Chưa có file: Khung kéo thả -->
+                        <div id="dropzoneBox" class="file-state-box">
+                            <div class="drop-icon">[ ↑ ]</div>
+                            <div class="drop-title"><strong>KÉO THẢ 1 FILE VÀO ĐÂY</strong> (HOẶC CLICK ĐỂ CHỌN)</div>
+                            <div class="drop-hint">// Slot nguyên tử: Lưu RAM, tự hủy sau khi RX kéo</div>
+                            <input type="file" id="singleFileInput" style="display:none;" />
                         </div>
 
-                        <!-- CHẾ ĐỘ FILE: THIẾT KẾ CÂN ĐỐI VỚI DIỆN TÍCH THẺ -->
-                        <div id="fileDropzone" class="dropzone-pane" style="display:none;">
-                            <!-- Khi chưa có file -->
-                            <div id="dropzoneBox" class="dropzone-box">
-                                <div class="drop-icon">[ ↑ ]</div>
-                                <p class="drop-title"><strong>KÉO THẢ 1 FILE VÀO ĐÂY</strong></p>
-                                <p class="drop-sub">hoặc click để chọn file từ máy</p>
-                                <div class="drop-hint">// Slot nguyên tử: Lưu RAM, tự hủy khi tải</div>
-                                <input type="file" id="singleFileInput" style="display:none;" />
+                        <!-- Đã nạp file: Thẻ hiển thị file -->
+                        <div id="fileActiveCard" class="file-state-box file-ready" style="display:none;">
+                            <div class="file-card-tag">[ FILE ĐANG SẴN SÀNG ]</div>
+                            <div class="file-card-info">
+                                <div class="file-row">
+                                    <span class="file-lbl">Tên:</span>
+                                    <strong id="activeFileName">-</strong>
+                                </div>
+                                <div class="file-row">
+                                    <span class="file-lbl">Dung lượng:</span>
+                                    <span id="activeFileSize">0 KB</span>
+                                </div>
+                                <div class="file-row">
+                                    <span class="file-lbl">Cơ chế:</span>
+                                    <span class="file-note">1 file duy nhất trong RAM • Tự hủy sau khi RX kéo</span>
+                                </div>
                             </div>
-
-                            <!-- Khi đã nạp file: Thẻ hiển thị đầy đủ thông tin -->
-                            <div id="fileActiveCard" class="file-loaded-card" style="display:none;">
-                                <div class="file-card-tag">[ FILE ĐANG SẴN SÀNG ]</div>
-                                <div class="file-card-body">
-                                    <div class="file-meta-row">
-                                        <span class="meta-label">Tên:</span>
-                                        <strong id="activeFileName">-</strong>
-                                    </div>
-                                    <div class="file-meta-row">
-                                        <span class="meta-label">Dung lượng:</span>
-                                        <span id="activeFileSize">0 KB</span>
-                                    </div>
-                                    <div class="file-meta-row">
-                                        <span class="meta-label">Cơ chế:</span>
-                                        <span class="meta-desc">1 file duy nhất • Tự hủy sau khi RX kéo</span>
-                                    </div>
-                                </div>
-                                <div class="file-card-footer">
-                                    <button id="btnRemoveFile" class="btn-white">✕ HỦY &amp; ĐỔI FILE</button>
-                                </div>
+                            <div class="file-card-action">
+                                <button id="btnRemoveFile" class="btn-white">✕ HỦY &amp; ĐỔI FILE</button>
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    <!-- CỘT PHẢI: LỆNH RX + OS TABS + COPY -->
-                    <div class="pane-right">
-                        <div class="rx-header-row">
-                            <span class="rx-title">LỆNH RX:</span>
-                            <div class="os-tabs">
-                                <button class="os-tab active" data-os="linux">LINUX</button>
-                                <button class="os-tab" data-os="win">WIN</button>
-                                <button class="os-tab" data-os="browser">URL</button>
-                            </div>
-                        </div>
-
-                        <div class="rx-cmd-card">
-                            <div class="cmd-label">// Thực thi trực tiếp trên Terminal:</div>
-                            <div class="cmd-code-wrapper">
-                                <code id="cheatCode">curl -sL http://localhost:8080/1-r | sh</code>
-                            </div>
-                            <div class="cmd-note" id="cheatNote">Nhận và thực thi ngay lập tức qua pipe</div>
-                        </div>
-
-                        <div class="rx-footer-row">
-                            <button id="btnCopyCheat" class="btn-black">COPY</button>
+                <!-- PHẦN LỆNH RX CỐ ĐỊNH ĐƯỢC ĐƯA XUỐNG DƯỚI -->
+                <div class="rx-fixed-bar">
+                    <div class="rx-bar-header">
+                        <span class="rx-title">LỆNH CHẠY TRÊN MÁY ĐÍCH (RX):</span>
+                        <div class="os-tabs">
+                            <button class="os-tab active" data-os="linux">LINUX</button>
+                            <button class="os-tab" data-os="win">WIN</button>
+                            <button class="os-tab" data-os="browser">URL</button>
                         </div>
                     </div>
+                    <div class="rx-bar-content">
+                        <div class="rx-code-box">
+                            <code id="cheatCode">curl -sL http://localhost:8080/1-r | sh</code>
+                        </div>
+                        <button id="btnCopyCheat" class="btn-black">COPY</button>
+                    </div>
+                    <div class="rx-bar-note" id="cheatNote">Nhận và thực thi ngay lập tức qua pipe</div>
                 </div>
             </div>
         </main>
@@ -159,35 +144,36 @@
         <!-- 3. RECEIVER VIEW (*-r) -->
         <main id="receiverView" style="display:none;">
             <div class="workspace">
-                <div class="dual-box">
-                    <!-- CỘT TRÁI: DỮ LIỆU NHẬN -->
-                    <div class="pane-left">
-                        <div id="recvTextSection" class="recv-pane">
-                            <pre id="recvTextDisplay"><code># Chờ dữ liệu từ TX...</code></pre>
-                        </div>
-                        <div id="recvFileSection" class="recv-pane file-recv" style="display:none;">
-                            <div class="file-recv-box">
-                                <div class="file-card-tag">[ NHẬN ĐƯỢC FILE ]</div>
+                <!-- FORM DỮ LIỆU NHẬN CỐ ĐỊNH -->
+                <div class="payload-frame">
+                    <div id="recvTextSection" class="form-pane">
+                        <pre id="recvTextDisplay"><code># Chờ dữ liệu từ TX...</code></pre>
+                    </div>
+                    <div id="recvFileSection" class="form-pane" style="display:none;">
+                        <div class="file-state-box file-ready">
+                            <div class="file-card-tag">[ NHẬN ĐƯỢC FILE TỪ TX ]</div>
+                            <div class="file-card-info">
                                 <h3 id="recvFileName">-</h3>
                                 <p id="recvFileSize">0 KB</p>
+                            </div>
+                            <div class="file-card-action">
                                 <a id="btnDownloadFile" class="btn-black" href="#" download>TẢI FILE VỀ MÁY</a>
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    <!-- CỘT PHẢI: THÔNG TIN RX & THAO TÁC -->
-                    <div class="pane-right">
-                        <div class="rx-header-row">
-                            <span class="rx-title">BÊN NHẬN (RX):</span>
+                <!-- THANH THAO TÁC CỐ ĐỊNH Ở DƯỚI -->
+                <div class="rx-fixed-bar">
+                    <div class="rx-bar-header">
+                        <span class="rx-title">BÊN NHẬN (RX):</span>
+                        <span class="rx-status-tag">[KẾT NỐI: HOẠT ĐỘNG]</span>
+                    </div>
+                    <div class="rx-bar-content">
+                        <div class="rx-code-box">
+                            <span>// Dữ liệu sẽ tự hủy khỏi RAM sau khi đọc hoặc tải về (Burn-After-Read)</span>
                         </div>
-                        <div class="rx-cmd-card">
-                            <div class="cmd-label">// Trạng thái đầu dây:</div>
-                            <p>Đã cắm vào TX phòng hiện tại.</p>
-                            <div class="cmd-note">// Dữ liệu tự hủy khỏi RAM sau khi đọc (Burn-After-Read)</div>
-                        </div>
-                        <div class="rx-footer-row">
-                            <button id="btnCopyRecvText" class="btn-black">COPY DỮ LIỆU</button>
-                        </div>
+                        <button id="btnCopyRecvText" class="btn-black">COPY DỮ LIỆU</button>
                     </div>
                 </div>
             </div>
