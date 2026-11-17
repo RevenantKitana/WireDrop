@@ -73,19 +73,34 @@ load_env() {
     PORT="${PORT:-8080}"
 }
 
-# 3. Đảm bảo binary WireDrop sẵn sàng
-ensure_wiredrop_bin() {
-    WIREDROP_BIN="$SCRIPT_DIR/wiredrop$BIN_EXT"
-    if [ ! -f "$WIREDROP_BIN" ]; then
-        echo -e "${YELLOW}[!] Chưa tìm thấy binary WireDrop, đang tự động biên dịch...${RESET}"
-        if command -v go >/dev/null 2>&1; then
-            (cd "$SCRIPT_DIR" && go build -ldflags="-s -w" -o "$WIREDROP_BIN" .)
-            echo -e "${GREEN}[✓] Đã biên dịch WireDrop thành công!${RESET}"
-        else
-            echo -e "${RED}[✕] Lỗi: Không tìm thấy Go compiler để build WireDrop. Vui lòng cài Go hoặc đặt file binary vào thư mục.${RESET}"
-            exit 1
+# 3. Quét tìm file thực thi WireDrop đã có
+find_wiredrop_bin() {
+    CANDIDATES=(
+        "$SCRIPT_DIR/wiredrop$BIN_EXT"
+        "$SCRIPT_DIR/wiredrop"
+        "$SCRIPT_DIR/wiredrop.exe"
+        "$BIN_DIR/wiredrop$BIN_EXT"
+        "$BIN_DIR/wiredrop"
+        "$BIN_DIR/wiredrop.exe"
+    )
+
+    for CANDIDATE in "${CANDIDATES[@]}"; do
+        if [ -f "$CANDIDATE" ]; then
+            chmod +x "$CANDIDATE" 2>/dev/null || true
+            WIREDROP_BIN="$CANDIDATE"
+            return 0
         fi
+    done
+
+    # Kiểm tra trong system PATH
+    if command -v wiredrop >/dev/null 2>&1; then
+        WIREDROP_BIN="$(command -v wiredrop)"
+        return 0
     fi
+
+    echo -e "${RED}[✕] Không tìm thấy file thực thi WireDrop (wiredrop / wiredrop.exe)!${RESET}"
+    echo -e "${YELLOW}>> Vui lòng đặt file thực thi WireDrop vào thư mục dự án này.${RESET}"
+    exit 1
 }
 
 # 4. Tự động tải Cloudflare Portable nếu chưa có
@@ -274,7 +289,7 @@ run_custom_tunnel() {
 # --- MAIN ---
 detect_platform
 load_env
-ensure_wiredrop_bin
+find_wiredrop_bin
 ensure_cloudflared
 
 # Trực tiếp nhận cờ tham số nếu truyền vào

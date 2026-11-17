@@ -40,21 +40,31 @@ function Load-Env {
     if (-not $global:Port) { $global:Port = "8080" }
 }
 
-# 2. Đảm bảo wiredrop.exe sẵn sàng
-function Ensure-Wiredrop {
-    if (-not (Test-Path $WiredropBin)) {
-        Write-Host "[!] Chưa tìm thấy wiredrop.exe, đang tự động biên dịch..." -ForegroundColor Yellow
-        $goCmd = Get-Command "go" -ErrorAction SilentlyContinue
-        if ($goCmd) {
-            Push-Location $ScriptDir
-            go build -ldflags="-s -w" -o wiredrop.exe .
-            Pop-Location
-            Write-Host "[✓] Đã biên dịch wiredrop.exe thành công!" -ForegroundColor Green
-        } else {
-            Write-Host "[✕] Không tìm thấy Go compiler. Vui lòng cài đặt Go hoặc đặt file wiredrop.exe vào thư mục." -ForegroundColor Red
-            exit 1
+# 2. Quét tìm file thực thi WireDrop đã có
+function Find-WiredropBin {
+    $candidates = @(
+        $WiredropBin,
+        (Join-Path $ScriptDir "wiredrop"),
+        (Join-Path $BinDir "wiredrop.exe"),
+        (Join-Path $BinDir "wiredrop")
+    )
+
+    foreach ($cand in $candidates) {
+        if (Test-Path $cand) {
+            $global:WiredropBin = $cand
+            return
         }
     }
+
+    $sysWire = Get-Command "wiredrop" -ErrorAction SilentlyContinue
+    if ($sysWire) {
+        $global:WiredropBin = $sysWire.Source
+        return
+    }
+
+    Write-Host "[✕] Không tìm thấy file thực thi WireDrop (wiredrop.exe)!" -ForegroundColor Red
+    Write-Host ">> Vui lòng đặt file thực thi wiredrop.exe vào thư mục này." -ForegroundColor Yellow
+    exit 1
 }
 
 # 3. Tự động tải Cloudflare Portable nếu chưa có
@@ -225,7 +235,7 @@ function Run-CustomTunnel {
 
 # --- MAIN ---
 Load-Env
-Ensure-Wiredrop
+Find-WiredropBin
 Ensure-Cloudflared
 
 if ($args[0] -eq "1" -or $args[0] -eq "--quick") {
