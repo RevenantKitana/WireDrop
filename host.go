@@ -382,8 +382,8 @@ func runTunnelFlow(exeDir string, cfg EnvConfig, isQuick bool) {
 
 	var cfCmd *exec.Cmd
 	if isQuick {
-		fmt.Println("[*] Dang mo duong ham Cloudflare Quick Tunnel (protocol: http2)...")
-		cfCmd = exec.Command(cfBin, "tunnel", "--no-autoupdate", "--protocol", "http2", "--url", "http://127.0.0.1:"+cfg.Port)
+		fmt.Println("[*] Dang mo duong ham Cloudflare Quick Tunnel (protocol: auto)...")
+		cfCmd = exec.Command(cfBin, "tunnel", "--no-autoupdate", "--url", "http://127.0.0.1:"+cfg.Port)
 	} else {
 		fmt.Println("[*] Dang ket noi Cloudflare Named Tunnel theo Token (protocol: http2)...")
 		cfCmd = exec.Command(cfBin, "tunnel", "--no-autoupdate", "--protocol", "http2", "run", "--token", cfg.CloudflareToken)
@@ -491,6 +491,11 @@ func runTunnelFlow(exeDir string, cfg EnvConfig, isQuick bool) {
 	fmt.Printf("     Linux/macOS:           curl -sL %s/%s-r | sh\n", activeURL, randSlug)
 	fmt.Printf("     Windows PowerShell:    irm %s/%s-r | iex\n", activeURL, randSlug)
 	fmt.Printf("     Tai File:              curl -sLJO %s/%s-r\n", activeURL, randSlug)
+	if isQuick {
+		fmt.Println("----------------------------------------------------------------")
+		fmt.Println(" [!] Luu y: Mot so nha mang VN (Viettel/VNPT/FPT) chan trycloudflare.com")
+		fmt.Println("     Neu may khac khong truy cap duoc, hay dung [2] Domain ca nhan!")
+	}
 	fmt.Println("----------------------------------------------------------------")
 	fmt.Println(" [Nhan Ctrl + C de dung va dong duong ham bat cu luc nao]")
 	fmt.Println("================================================================")
