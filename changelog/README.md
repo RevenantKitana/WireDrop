@@ -5,7 +5,8 @@ Thư mục này lưu trữ toàn bộ các file changelog chi tiết của dự 
 ## Danh Sách Changelog:
 
 ### 🚀 Giai Đoạn 2: Đại Tu Giao Diện Retro Monochrome & Tối Ưu Trải Nghiệm (v0.10.x)
-* [v0.10.4 - Sửa triệt để lỗi CSS không áp dụng khi deploy lên Render (MIME & Cache Fix)](v0.10.4-fix-render-css-mime-and-cache.md) - *(2026-11-17)* 🚀 **Mới nhất**
+* [v0.10.5 - Bổ sung hướng dẫn TX CLI trực quan trên Web Client](v0.10.5-client-tx-cli-guide.md) - *(2026-11-17)* 🚀 **Mới nhất**
+* [v0.10.4 - Sửa triệt để lỗi CSS không áp dụng khi deploy lên Render (MIME & Cache Fix)](v0.10.4-fix-render-css-mime-and-cache.md) - *(2026-11-17)*
 * [v0.10.3 - Tinh giản diễn giải, Cheatsheet 3 cột & Slug 4 ký tự ngẫu nhiên](v0.10.3-clean-ui-actionable-cheatsheet.md) - *(2026-11-17)*
 * [v0.10.2 - Mở rộng bề ngang 92% toàn màn hình & Sửa lỗi co cụm layout Flexbox](v0.10.2-widescreen-layout-flex-fix.md) - *(2026-11-17)*
 * [v0.10.1 - Form kế thừa thống nhất, thanh lệnh RX đáy & Triệt tiêu biến thiên kích thước (Zero Jitter)](v0.10.1-unified-form-zero-jitter.md) - *(2026-11-17)*

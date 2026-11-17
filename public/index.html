@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/style.css?v=0.10.4">
+    <link rel="stylesheet" href="/style.css?v=0.10.5">
 </head>
 <body>
     <div class="wrap">
@@ -54,10 +54,10 @@
                     <div class="home-guide-grid">
                         <div class="guide-col">
                             <strong>[1. BÊN PHÁT (TX)]</strong>
-                            <p>Khởi tạo bàn phát:</p>
-                            <p>Nhập slug và bấm <strong>TX (PHÁT)</strong> mở giao diện gửi.</p>
-                            <p style="margin-top: 4px;">Nạp nội dung:</p>
-                            <p>Dán script lệnh hoặc kéo thả 1 file vào khung soạn thảo.</p>
+                            <p>Terminal (đẩy script vào dây):</p>
+                            <code class="rx-cmd" id="homeGuideTx">curl -s -X POST --data-binary @script.sh host/:room-s</code>
+                            <p style="margin-top: 4px;">Hoặc truyền pipe trực tiếp:</p>
+                            <code class="rx-cmd" id="homeGuideTxPipe">echo "cmd" | curl -s -X POST --data-binary @- host/:room-s</code>
                         </div>
                         <div class="guide-col">
                             <strong>[2. THỰC THI LỆNH (RX)]</strong>
@@ -103,7 +103,7 @@ Write-Host 'Hello from WireDrop' -ForegroundColor Green
                         <div id="dropzoneBox" class="file-state-box">
                             <div class="drop-icon">[ ↑ ]</div>
                             <div class="drop-title"><strong>KÉO THẢ 1 FILE VÀO ĐÂY</strong> (HOẶC CLICK ĐỂ CHỌN)</div>
-                            <div class="drop-hint">// Slot nguyên tử: Lưu RAM, tự hủy sau khi RX kéo</div>
+                            <div class="drop-hint">Kéo thả file hoặc nạp từ CLI: <code>curl -s -F "file=@name" host/:room-s</code></div>
                             <input type="file" id="singleFileInput" style="display:none;" />
                         </div>
 
@@ -134,10 +134,11 @@ Write-Host 'Hello from WireDrop' -ForegroundColor Green
                 <!-- PHẦN LỆNH RX CỐ ĐỊNH ĐƯỢC ĐƯA XUỐNG DƯỚI -->
                 <div class="rx-fixed-bar">
                     <div class="rx-bar-header">
-                        <span class="rx-title">LỆNH CHẠY TRÊN MÁY ĐÍCH (RX):</span>
+                        <span class="rx-title" id="rxBarTitle">LỆNH CHẠY TRÊN MÁY ĐÍCH (RX):</span>
                         <div class="os-tabs">
                             <button class="os-tab active" data-os="linux">LINUX</button>
                             <button class="os-tab" data-os="win">WIN</button>
+                            <button class="os-tab" data-os="tx">TX CLI</button>
                             <button class="os-tab" data-os="browser">URL</button>
                         </div>
                     </div>
@@ -202,6 +203,6 @@ Write-Host 'Hello from WireDrop' -ForegroundColor Green
     </div>
 
     <div id="toast">[ ĐÃ SAO CHÉP ]</div>
-    <script src="/app.js?v=0.10.4"></script>
+    <script src="/app.js?v=0.10.5"></script>
 </body>
 </html>

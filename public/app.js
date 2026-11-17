@@ -36,15 +36,29 @@
 
     function updateCheatCode() {
         if (isHome) return;
-        const url = `${location.origin}/${slug}-r`;
+        const urlRx = `${location.origin}/${slug}-r`;
+        const urlTx = `${location.origin}/${slug}-s`;
         const isFile = $("btnModeFile").classList.contains("active");
-        if (os === "linux") {
-            $("cheatCode").textContent = isFile ? `curl -sLJO ${url}` : `curl -sL ${url} | sh`;
-        } else if (os === "win") {
-            const fname = $("activeFileName").textContent !== "-" ? $("activeFileName").textContent : "file.bin";
-            $("cheatCode").textContent = isFile ? `iwr ${url} -OutFile ${fname}` : `irm ${url} | iex`;
+        const titleEl = $("rxBarTitle");
+
+        if (os === "tx") {
+            if (titleEl) titleEl.textContent = "LỆNH ĐẨY DỮ LIỆU TỪ TERMINAL (TX):";
+            if (isFile) {
+                const fname = ($("activeFileName").textContent && $("activeFileName").textContent !== "-") ? $("activeFileName").textContent : "file.ext";
+                $("cheatCode").textContent = `curl -s -F "file=@${fname}" ${urlTx}`;
+            } else {
+                $("cheatCode").textContent = `curl -s -X POST --data-binary @script.sh ${urlTx}`;
+            }
         } else {
-            $("cheatCode").textContent = url;
+            if (titleEl) titleEl.textContent = "LỆNH CHẠY TRÊN MÁY ĐÍCH (RX):";
+            if (os === "linux") {
+                $("cheatCode").textContent = isFile ? `curl -sLJO ${urlRx}` : `curl -sL ${urlRx} | sh`;
+            } else if (os === "win") {
+                const fname = ($("activeFileName").textContent && $("activeFileName").textContent !== "-") ? $("activeFileName").textContent : "file.bin";
+                $("cheatCode").textContent = isFile ? `iwr ${urlRx} -OutFile ${fname}` : `irm ${urlRx} | iex`;
+            } else {
+                $("cheatCode").textContent = urlRx;
+            }
         }
     }
 
@@ -202,10 +216,13 @@
         const tx = $("quickTxLink"), rx = $("quickRxLink");
         if (tx) { tx.href = `/${s}-s`; tx.textContent = `/${s}-s (TX)`; }
         if (rx) { rx.href = `/${s}-r`; rx.textContent = `/${s}-r (RX)`; }
-        const url = `${location.origin}/${s}-r`;
-        const gl = $("homeGuideLinux"); if (gl) gl.textContent = `curl -sL ${url} | sh`;
-        const gw = $("homeGuideWin"); if (gw) gw.textContent = `irm ${url} | iex`;
-        const gf = $("homeGuideFile"); if (gf) gf.textContent = `curl -sLJO ${url}`;
+        const urlRx = `${location.origin}/${s}-r`;
+        const urlTx = `${location.origin}/${s}-s`;
+        const gtx = $("homeGuideTx"); if (gtx) gtx.textContent = `curl -s -X POST --data-binary @script.sh ${urlTx}`;
+        const gtxp = $("homeGuideTxPipe"); if (gtxp) gtxp.textContent = `echo "cmd" | curl -s -X POST --data-binary @- ${urlTx}`;
+        const gl = $("homeGuideLinux"); if (gl) gl.textContent = `curl -sL ${urlRx} | sh`;
+        const gw = $("homeGuideWin"); if (gw) gw.textContent = `irm ${urlRx} | iex`;
+        const gf = $("homeGuideFile"); if (gf) gf.textContent = `curl -sLJO ${urlRx}`;
     }
 
     function detectRole() {
@@ -238,6 +255,12 @@
 
         if (isSender && (location.search.includes("mode=file") || location.hash === "#file")) {
             showFileDropzone();
+        }
+
+        const tabParam = new URLSearchParams(location.search).get("tab");
+        if (tabParam && ["linux", "win", "tx", "browser"].includes(tabParam)) {
+            os = tabParam;
+            document.querySelectorAll(".os-tab").forEach(t => t.classList.toggle("active", t.dataset.os === os));
         }
 
         updateCheatCode();
