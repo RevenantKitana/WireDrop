@@ -29,9 +29,18 @@
         if (isHome) return;
         const url = `${location.origin}/${slug}-r`;
         const isFile = $("btnModeFile").classList.contains("active");
-        if (os === "linux") $("cheatCode").textContent = isFile ? `curl -sLJO ${url}` : `curl -sL ${url} | sh`;
-        else if (os === "win") $("cheatCode").textContent = isFile ? `iwr ${url} -OutFile ${$("activeFileName").textContent || "file.bin"}` : `irm ${url} | iex`;
-        else $("cheatCode").textContent = url;
+        const cn = $("cheatNote");
+        if (os === "linux") {
+            $("cheatCode").textContent = isFile ? `curl -sLJO ${url}` : `curl -sL ${url} | sh`;
+            if (cn) cn.textContent = isFile ? "curl -sLJO: Tự động lưu đúng tên file gốc" : "Nhận và thực thi ngay lập tức qua pipe";
+        } else if (os === "win") {
+            const fname = $("activeFileName").textContent !== "-" ? $("activeFileName").textContent : "file.bin";
+            $("cheatCode").textContent = isFile ? `iwr ${url} -OutFile ${fname}` : `irm ${url} | iex`;
+            if (cn) cn.textContent = isFile ? "Tải file trực tiếp về thư mục hiện tại" : "PowerShell: Nhận và thực thi trong bộ nhớ";
+        } else {
+            $("cheatCode").textContent = url;
+            if (cn) cn.textContent = "Truy cập trực tiếp trên trình duyệt Web";
+        }
     }
 
     function showLockout(msg) {
@@ -87,6 +96,8 @@
         if (isSender) {
             if (d.slot_type === 2) {
                 showActiveFile(d.slot_file_name, d.slot_file_size);
+            } else if (location.search.includes("mode=file") || location.hash === "#file") {
+                showFileDropzone();
             } else {
                 if (!typing) $("senderTextarea").value = d.slot_text || "";
                 showTextEditor();
@@ -207,6 +218,10 @@
 
         $("senderView").style.display = isSender ? "flex" : "none";
         $("receiverView").style.display = isSender ? "none" : "flex";
+
+        if (isSender && (location.search.includes("mode=file") || location.hash === "#file")) {
+            showFileDropzone();
+        }
 
         updateCheatCode();
         connectSSE();
