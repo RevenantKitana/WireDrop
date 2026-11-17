@@ -211,9 +211,9 @@ run_quick_tunnel() {
 
     sleep 1
 
-    echo -e "${CYAN}[*] Đang mở đường hầm Cloudflare Quick Tunnel...${RESET}"
+    echo -e "${CYAN}[*] Đang mở đường hầm Cloudflare Quick Tunnel (protocol: http2)...${RESET}"
     rm -f "$SCRIPT_DIR/.cf_quick.log"
-    "$CF_BIN" tunnel --url "http://localhost:${PORT}" > "$SCRIPT_DIR/.cf_quick.log" 2>&1 &
+    "$CF_BIN" tunnel --protocol http2 --url "http://localhost:${PORT}" > "$SCRIPT_DIR/.cf_quick.log" 2>&1 &
     PID_TUNNEL=$!
 
     TUNNEL_URL=""
@@ -262,8 +262,8 @@ run_custom_tunnel() {
 
     sleep 1
 
-    echo -e "${CYAN}[*] Đang kết nối Cloudflare Named Tunnel theo Token...${RESET}"
-    "$CF_BIN" tunnel run --token "$CLOUDFLARE_TUNNEL_TOKEN" >/dev/null 2>&1 &
+    echo -e "${CYAN}[*] Đang kết nối Cloudflare Named Tunnel theo Token (protocol: http2)...${RESET}"
+    "$CF_BIN" tunnel --protocol http2 run --token "$CLOUDFLARE_TUNNEL_TOKEN" >/dev/null 2>&1 &
     PID_TUNNEL=$!
 
     RAND_SLUG=$(head /dev/urandom | tr -dc a-z0-9 | head -c 4 2>/dev/null || echo "drop")
