@@ -10,11 +10,12 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
 
-const Version = "v0.5.1"
+const Version = "v0.5.2"
 const defaultSlugChars = "abcdefghijklmnopqrstuvwxyz0123456789"
 
 func randomSlug(n int) string {
@@ -162,10 +163,8 @@ func roomDispatcher(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func main() {
-	// Dọn dẹp các phòng quá hạn (quét mỗi 5 phút, giải phóng phòng sau 2 giờ không hoạt động)
-	globalRooms.StartTTLWorker(5*time.Minute, 2*time.Hour)
-
+// createHandler khởi tạo ServeMux và middleware của WireDrop
+func createHandler() http.Handler {
 	mux := http.NewServeMux()
 
 	// 1. Phục vụ tĩnh với Content-Type chuẩn và No-Cache Header
@@ -197,6 +196,56 @@ func main() {
 		}
 	})
 
+	return corsMiddleware(loggingMiddleware(mux))
+}
+
+// runServer khởi tạo HTTP Server và in banner nếu cần
+func runServer(port string, printBanner bool) (*http.Server, error) {
+	globalRooms.StartTTLWorker(5*time.Minute, 2*time.Hour)
+
+	if port == "" {
+		port = "8080"
+	}
+	addr := ":" + port
+	handler := createHandler()
+	server := &http.Server{
+		Addr:    addr,
+		Handler: handler,
+	}
+
+	if printBanner {
+		sampleSlug := randomSlug(4)
+		fmt.Println("================================================================")
+		fmt.Printf("  ⚡ WireDrop %s (Pure Physical Connection Lock) is running!\n", Version)
+		fmt.Printf("  • Web Hub (Trang chu #):    http://localhost:%s/#\n", port)
+		fmt.Println("    (Mo link tren de xem Cheatsheet hoac tu tao phong tuy y)")
+		fmt.Println("  ----------------------------------------------------------------")
+		fmt.Printf("  • Vi du truyen nhanh (Phong mau ngau nhien: %s):\n", sampleSlug)
+		fmt.Printf("    - Web phat (TX):          http://localhost:%s/%s-s\n", port, sampleSlug)
+		fmt.Printf("    - Lenh nhan (RX Linux):   curl -sL http://localhost:%s/%s-r | sh\n", port, sampleSlug)
+		fmt.Printf("    - Lenh nhan (RX Windows): irm http://localhost:%s/%s-r | iex\n", port, sampleSlug)
+		fmt.Printf("    - Tai File (RX):          curl -sLJO http://localhost:%s/%s-r\n", port, sampleSlug)
+		fmt.Println("  • 100% Go Standard Library • Zero-Dependency")
+		fmt.Println("================================================================")
+	}
+
+	return server, nil
+}
+
+func main() {
+	exeName := filepath.Base(os.Args[0])
+	isPortableExe := strings.Contains(strings.ToLower(exeName), "portable")
+
+	args := os.Args[1:]
+	isHostCmd := len(args) > 0 && (args[0] == "host" || args[0] == "--host")
+	isServerCmd := len(args) > 0 && (args[0] == "server" || args[0] == "--server")
+
+	// Nếu là bản portable (không truyền cờ server) hoặc người dùng chủ động gõ lệnh 'host'
+	if (isPortableExe && !isServerCmd) || isHostCmd {
+		runPortableHost()
+		return
+	}
+
 	portFlag := flag.String("port", "", "Cong lang nghe HTTP (vi du: 8080)")
 	flag.Parse()
 
@@ -207,25 +256,9 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
-	addr := ":" + port
 
-	handler := corsMiddleware(loggingMiddleware(mux))
-
-	sampleSlug := randomSlug(4)
-	fmt.Println("================================================================")
-	fmt.Printf("  ⚡ WireDrop %s (Pure Physical Connection Lock) is running!\n", Version)
-	fmt.Printf("  • Web Hub (Trang chu #):    http://localhost:%s/#\n", port)
-	fmt.Println("    (Mo link tren de xem Cheatsheet hoac tu tao phong tuy y)")
-	fmt.Println("  ----------------------------------------------------------------")
-	fmt.Printf("  • Vi du truyen nhanh (Phong mau ngau nhien: %s):\n", sampleSlug)
-	fmt.Printf("    - Web phat (TX):          http://localhost:%s/%s-s\n", port, sampleSlug)
-	fmt.Printf("    - Lenh nhan (RX Linux):   curl -sL http://localhost:%s/%s-r | sh\n", port, sampleSlug)
-	fmt.Printf("    - Lenh nhan (RX Windows): irm http://localhost:%s/%s-r | iex\n", port, sampleSlug)
-	fmt.Printf("    - Tai File (RX):          curl -sLJO http://localhost:%s/%s-r\n", port, sampleSlug)
-	fmt.Println("  • 100% Go Standard Library • Zero-Dependency")
-	fmt.Println("================================================================")
-
-	if err := http.ListenAndServe(addr, handler); err != nil {
+	srv, _ := runServer(port, true)
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("Server sập: %v", err)
 	}
 }

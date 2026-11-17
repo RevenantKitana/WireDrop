@@ -1,4 +1,4 @@
-# CLAUDE.md - Quy Tắc Quản Lý Dự Án & Chuẩn Phát Triển WireDrop
+l# CLAUDE.md - Quy Tắc Quản Lý Dự Án & Chuẩn Phát Triển WireDrop
 
 ---
 

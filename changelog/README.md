@@ -9,7 +9,8 @@ Mọi file được đặt tên theo quy chuẩn: `NN-v0.X.Y-<slug>.md` để đ
 ## Danh Sách Changelog Theo Các Giai Đoạn Phát Triển:
 
 ### 🌐 Giai Đoạn 5: FastHost CLI & Tự Động Hóa Cloudflare Tunnel (v0.5.x)
-* [17-v0.5.1 - Tinh chỉnh UX Console FastHost & Backend: Link Trang chủ # và chú thích Phòng mẫu ví dụ](17-v0.5.1-fasthost-ux-hub-link-clean-sample.md) - *(2026-11-17)* 🚀 **Mới nhất (State hiện tại)**
+* [18-v0.5.2 - Đóng gói Native Go Portable Windows All-in-One & Phân tách thư mục dist/](18-v0.5.2-native-portable-windows-dist.md) - *(2026-11-17)* 🚀 **Mới nhất (State hiện tại)**
+* [17-v0.5.1 - Tinh chỉnh UX Console FastHost & Backend: Link Trang chủ # và chú thích Phòng mẫu ví dụ](17-v0.5.1-fasthost-ux-hub-link-clean-sample.md) - *(2026-11-17)*
 * [16-v0.5.0 - Bổ sung công cụ FastHost CLI tự động hóa Cloudflare Tunnel Cross-Platform](16-v0.5.0-fasthost-cli-tunnel.md) - *(2026-11-17)*
 
 ### 🎨 Giai Đoạn 4: Đại Tu Giao Diện Retro Monochrome Minimalist & Form Thống Nhất (v0.4.x)
