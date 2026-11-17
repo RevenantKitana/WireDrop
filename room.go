@@ -13,10 +13,119 @@ import (
 type PayloadType int
 
 const (
-	PayloadEmpty PayloadType = iota // Đường ống đang rỗng
-	PayloadText                     // Đang chứa 1 đoạn Lệnh / Script / Text
-	PayloadFile                     // Đang chứa 1 File duy nhất
+	PayloadEmpty       PayloadType = iota // Đường ống đang rỗng
+	PayloadText                           // Đang chứa 1 đoạn Lệnh / Script / Text
+	PayloadFile                           // Đang chứa 1 File duy nhất
+	PayloadChunkStream                    // Đang trong phiên truyền file lớn cắt mảnh 16MB
 )
+
+const (
+	ChunkSize       = 16 * 1024 * 1024 // 16MB chuẩn nhị phân
+	ChunkIdleHold   = 10 * time.Minute // Thời gian giữ Chunk 0 tối đa nếu RX chưa kết nối
+	ChunkStallLimit = 45 * time.Second // Thời gian chờ tối đa khi truyền 1 chunk
+)
+
+// ChunkItem đại diện cho 1 mảnh 16MB đang nằm trong bộ đệm RAM
+type ChunkItem struct {
+	Index    int
+	Data     []byte
+	Size     int
+	Checksum string
+}
+
+// ChunkSession quản lý luân chuyển các chunk 16MB theo cơ chế Ping-Pong Buffer (Dung lượng đệm = 2 slots)
+type ChunkSession struct {
+	sync.Mutex
+	SessionID   string
+	FileName    string
+	TotalSize   int64
+	TotalChunks int
+	CreatedAt   time.Time
+	LastActive  time.Time
+
+	// Buffer channel chứa tối đa 2 chunks (32MB RAM cap)
+	chunkChan chan *ChunkItem
+
+	// Kênh đồng bộ và ngắt
+	doneChan  chan struct{}
+	cancelled bool
+	cancelMsg string
+
+	// Timer tự hủy Chunk 0 nếu RX không vào sau 10 phút
+	idleTimer *time.Timer
+}
+
+func NewChunkSession(sessionID, fileName string, totalSize int64, totalChunks int) *ChunkSession {
+	return &ChunkSession{
+		SessionID:   sessionID,
+		FileName:    fileName,
+		TotalSize:   totalSize,
+		TotalChunks: totalChunks,
+		CreatedAt:   time.Now(),
+		LastActive:  time.Now(),
+		chunkChan:   make(chan *ChunkItem, 2), // Ping-Pong Buffer (Window = 2)
+		doneChan:    make(chan struct{}),
+	}
+}
+
+// PushChunk đẩy một chunk vào buffer (chờ tối đa timeout nếu buffer 2 slots đang đầy)
+func (s *ChunkSession) PushChunk(item *ChunkItem, timeout time.Duration) (bool, string) {
+	s.Lock()
+	if s.cancelled {
+		msg := s.cancelMsg
+		s.Unlock()
+		return false, msg
+	}
+	s.LastActive = time.Now()
+	s.Unlock()
+
+	select {
+	case s.chunkChan <- item:
+		return true, ""
+	case <-s.doneChan:
+		s.Lock()
+		defer s.Unlock()
+		return false, s.cancelMsg
+	case <-time.After(timeout):
+		return false, "Push chunk timeout (45s stall)"
+	}
+}
+
+// PopChunk lấy một chunk từ buffer xả sang RX (chờ tối đa timeout)
+func (s *ChunkSession) PopChunk(timeout time.Duration) (*ChunkItem, bool, string) {
+	select {
+	case item, ok := <-s.chunkChan:
+		if !ok {
+			return nil, false, "Session closed"
+		}
+		s.Lock()
+		s.LastActive = time.Now()
+		s.Unlock()
+		return item, true, ""
+	case <-s.doneChan:
+		s.Lock()
+		defer s.Unlock()
+		return nil, false, s.cancelMsg
+	case <-time.After(timeout):
+		return nil, false, "Pop chunk timeout (45s stall)"
+	}
+}
+
+// Cancel hủy phiên truyền file do một trong hai bên ngắt hoặc quá hạn
+func (s *ChunkSession) Cancel(reason string) {
+	s.Lock()
+	if s.cancelled {
+		s.Unlock()
+		return
+	}
+	s.cancelled = true
+	s.cancelMsg = reason
+	if s.idleTimer != nil {
+		s.idleTimer.Stop()
+	}
+	close(s.doneChan)
+	s.Unlock()
+}
 
 // PipeSlot là khe cắm nguyên tử duy nhất của phòng (chỉ chứa 1 vật phẩm tại 1 thời điểm)
 type PipeSlot struct {
@@ -60,6 +169,9 @@ type RoomState struct {
 	pipeReader *io.PipeReader
 	pipeWriter *io.PipeWriter
 	pipeLock   sync.Mutex
+
+	// Dành cho cơ chế 16MB Chunked Dual-Buffering Pipe
+	ChunkSess *ChunkSession
 }
 
 // RoomManager quản lý danh sách các sợi dây phòng trong RAM
@@ -161,6 +273,11 @@ func (r *RoomState) Cleanup() {
 	r.Lock()
 	defer r.Unlock()
 
+	if r.ChunkSess != nil {
+		r.ChunkSess.Cancel("Room cleanup")
+		r.ChunkSess = nil
+	}
+
 	if r.Slot.TempPath != "" {
 		_ = os.Remove(r.Slot.TempPath)
 	}
@@ -186,6 +303,11 @@ func (r *RoomState) SetText(text string) {
 	r.Lock()
 	defer r.Unlock()
 
+	if r.ChunkSess != nil {
+		r.ChunkSess.Cancel("Replaced by text")
+		r.ChunkSess = nil
+	}
+
 	// Dọn dẹp file tạm cũ nếu có
 	if r.Slot.TempPath != "" {
 		_ = os.Remove(r.Slot.TempPath)
@@ -204,6 +326,11 @@ func (r *RoomState) SetFile(name string, size int64, data []byte, tempPath strin
 	r.Lock()
 	defer r.Unlock()
 
+	if r.ChunkSess != nil {
+		r.ChunkSess.Cancel("Replaced by single file")
+		r.ChunkSess = nil
+	}
+
 	// Dọn dẹp file tạm cũ nếu có
 	if r.Slot.TempPath != "" && r.Slot.TempPath != tempPath {
 		_ = os.Remove(r.Slot.TempPath)
@@ -220,15 +347,54 @@ func (r *RoomState) SetFile(name string, size int64, data []byte, tempPath strin
 	r.Touch()
 }
 
+// StartChunkSession khởi tạo phiên truyền file cắt mảnh 16MB mới
+func (r *RoomState) StartChunkSession(sessionID, fileName string, totalSize int64, totalChunks int) *ChunkSession {
+	r.Lock()
+	defer r.Unlock()
+
+	if r.ChunkSess != nil {
+		r.ChunkSess.Cancel("Superseded by new session")
+		r.ChunkSess = nil
+	}
+
+	if r.Slot.TempPath != "" {
+		_ = os.Remove(r.Slot.TempPath)
+	}
+
+	sess := NewChunkSession(sessionID, fileName, totalSize, totalChunks)
+	r.ChunkSess = sess
+	r.Slot = PipeSlot{
+		Type:      PayloadChunkStream,
+		FileName:  fileName,
+		FileSize:  totalSize,
+		CreatedAt: time.Now(),
+	}
+	r.Touch()
+	return sess
+}
+
+// GetChunkSession lấy session truyền file cắt mảnh hiện tại (nếu có)
+func (r *RoomState) GetChunkSession() *ChunkSession {
+	r.RLock()
+	defer r.RUnlock()
+	return r.ChunkSess
+}
+
 // ClearSlot rút cạn đường ống về trạng thái Rỗng
 func (r *RoomState) ClearSlot() {
 	r.Lock()
 	defer r.Unlock()
 
+	if r.ChunkSess != nil {
+		r.ChunkSess.Cancel("Slot cleared")
+		r.ChunkSess = nil
+	}
+
 	if r.Slot.TempPath != "" {
 		_ = os.Remove(r.Slot.TempPath)
 	}
 	r.Slot = PipeSlot{Type: PayloadEmpty}
+	r.Touch()
 }
 
 // =========================================================================

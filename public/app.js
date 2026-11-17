@@ -10,7 +10,7 @@
         return res;
     }
     const defaultSlug = generateSlug(4);
-    let slug = defaultSlug, isSender = true, isHome = false, os = "linux", sse = null, saveTimer = null, typing = false, pollTimer = null, currentUploadXhr = null;
+    let slug = defaultSlug, isSender = true, isHome = false, os = "linux", sse = null, saveTimer = null, typing = false, pollTimer = null, currentUploadXhr = null, chunkUploadState = null;
 
     // Quản lý mã kết nối vật lý (Physical Connection ID) lưu theo phiên phòng/vai trò để F5 không bị khóa 409
     function getConnId() {
@@ -109,6 +109,12 @@
                 if (res.ok) {
                     res.json().then(d => {
                         setPairStatus(!!d.receiver_paired, !!d.sender_paired);
+                        if (isSender && chunkUploadState && chunkUploadState.waitingRx && d.receiver_paired) {
+                            chunkUploadState.waitingRx = false;
+                            $("uploadEta").textContent = "Đang truyền...";
+                            showToast("[RX ĐÃ KẾT NỐI • TIẾP TỤC ĐẨY FILE]");
+                            chunkUploadState.uploadNext();
+                        }
                         if (!isSender) {
                             renderPayload(d);
                         } else {
@@ -140,13 +146,33 @@
         sse.addEventListener("partner_paired", () => {
             const ns = $("nodeSender");
             setPairStatus(true, ns ? ns.textContent.includes("●") : true);
-            if (isSender) showToast("[RX ĐÃ KẾT NỐI]");
+            if (isSender) {
+                showToast("[RX ĐÃ KẾT NỐI]");
+                if (chunkUploadState && chunkUploadState.waitingRx) {
+                    chunkUploadState.waitingRx = false;
+                    $("uploadEta").textContent = "Đang truyền...";
+                    chunkUploadState.uploadNext();
+                }
+            }
         });
         sse.addEventListener("partner_unpaired", () => {
             const ns = $("nodeSender");
             setPairStatus(false, ns ? ns.textContent.includes("●") : true);
             if (isSender) showToast("[RX ĐÃ NGẮT]");
         });
+        sse.addEventListener("rx_connected", () => {
+            const nr = $("nodeReceiver");
+            setPairStatus(true, $("nodeSender") ? $("nodeSender").textContent.includes("●") : true);
+            if (isSender) {
+                showToast("[RX ĐÃ BẮT ĐẦU KÉO FILE]");
+                if (chunkUploadState && chunkUploadState.waitingRx) {
+                    chunkUploadState.waitingRx = false;
+                    $("uploadEta").textContent = "Đang truyền...";
+                    chunkUploadState.uploadNext();
+                }
+            }
+        });
+        sse.addEventListener("chunk_ack", () => {});
         sse.addEventListener("sender_paired", () => {
             const nr = $("nodeReceiver");
             setPairStatus(nr ? nr.textContent.includes("●") : false, true);
@@ -171,7 +197,7 @@
             }
         });
         sse.addEventListener("payload_cleared", () => {
-            if (!isSender) { showRecvEmpty(); showToast("[ĐÃ TỰ HỦY]"); }
+            if (!isSender) { showRecvEmpty(); showToast("[DỮ LIỆU ĐÃ RÚT KHỎI DÂY]"); }
         });
         sse.onerror = () => {
             fetch(`/${slug}/events?role=${role}&conn=${cid}&check=1`).then(r => {
@@ -292,11 +318,14 @@
         $("uploadEta").textContent = "Tính toán...";
     }
 
-    function updateUploadProgressUI(percent, loaded, total, speedBytes, etaStr) {
+    const CHUNK_SIZE = 16 * 1024 * 1024; // 16MB chuẩn nhị phân
+
+    function updateUploadProgressUI(percent, loaded, total, speedBytes, etaStr, currentChunk, totalChunks) {
         $("uploadProgressBar").style.width = `${percent}%`;
         $("uploadPercent").textContent = `${percent}%`;
         $("syncIndicator").textContent = `[NẠP: ${percent}%]`;
-        $("uploadTransferred").textContent = `${fmtSize(loaded)} / ${fmtSize(total)}`;
+        const chunkInfo = (currentChunk && totalChunks) ? ` (Mảnh ${currentChunk}/${totalChunks})` : "";
+        $("uploadTransferred").textContent = `${fmtSize(loaded)} / ${fmtSize(total)}${chunkInfo}`;
         $("uploadSpeed").textContent = fmtSpeed(speedBytes);
         $("uploadEta").textContent = etaStr;
     }
@@ -331,6 +360,14 @@
 
     function uploadFile(file) {
         if (!file || !isSender || isHome) return;
+        if (file.size <= CHUNK_SIZE) {
+            uploadSingleFile(file);
+        } else {
+            uploadChunkedFile(file);
+        }
+    }
+
+    function uploadSingleFile(file) {
         if (currentUploadXhr) {
             currentUploadXhr.abort();
             currentUploadXhr = null;
@@ -363,7 +400,7 @@
                     etaStr = "Xử lý...";
                 }
 
-                updateUploadProgressUI(percent, e.loaded, e.total, speedBytes, etaStr);
+                updateUploadProgressUI(percent, e.loaded, e.total, speedBytes, etaStr, 1, 1);
             }
         };
 
@@ -406,6 +443,151 @@
 
         xhr.open("POST", `/${slug}-s?conn=${cid}`);
         xhr.send(fd);
+    }
+
+    function uploadChunkedFile(file) {
+        if (currentUploadXhr) {
+            currentUploadXhr.abort();
+            currentUploadXhr = null;
+        }
+        if (chunkUploadState) {
+            chunkUploadState.cancelled = true;
+            chunkUploadState = null;
+        }
+
+        const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+        const sessionId = "sess_" + slug + "_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 7);
+        const cid = getConnId();
+
+        showUploadProgress(file.name, file.size);
+        $("syncIndicator").textContent = "[NẠP: 0%]";
+
+        const state = {
+            file,
+            sessionId,
+            cid,
+            totalChunks,
+            currentChunk: 0,
+            cancelled: false,
+            waitingRx: false,
+            startTime: Date.now(),
+            retryCount: 0,
+            uploadNext: null
+        };
+        chunkUploadState = state;
+
+        state.uploadNext = function () {
+            if (state.cancelled) return;
+            if (state.currentChunk >= state.totalChunks) {
+                showActiveFile(file.name, file.size);
+                $("syncIndicator").textContent = "[ĐÃ NẠP ✓]";
+                showToast(`[ĐÃ NẠP ${file.name}]`);
+                chunkUploadState = null;
+                return;
+            }
+
+            const idx = state.currentChunk;
+            const start = idx * CHUNK_SIZE;
+            const end = Math.min(file.size, start + CHUNK_SIZE);
+            const chunkBlob = file.slice(start, end);
+
+            const xhr = new XMLHttpRequest();
+            currentUploadXhr = xhr;
+
+            xhr.upload.onprogress = (e) => {
+                if (state.cancelled) return;
+                if (e.lengthComputable) {
+                    const currentTotalTransferred = start + e.loaded;
+                    const percent = Math.min(100, Math.round((currentTotalTransferred / file.size) * 100));
+                    const elapsedSec = (Date.now() - state.startTime) / 1000;
+                    let speedBytes = 0;
+                    if (elapsedSec > 0.2) speedBytes = currentTotalTransferred / elapsedSec;
+
+                    let etaStr = "--";
+                    if (speedBytes > 0 && currentTotalTransferred < file.size) {
+                        const remainingSec = Math.round((file.size - currentTotalTransferred) / speedBytes);
+                        if (remainingSec < 60) etaStr = `~${remainingSec}s`;
+                        else etaStr = `~${Math.floor(remainingSec / 60)}m ${remainingSec % 60}s`;
+                    } else if (percent === 100) {
+                        etaStr = "Xử lý...";
+                    }
+
+                    updateUploadProgressUI(percent, currentTotalTransferred, file.size, speedBytes, etaStr, idx + 1, state.totalChunks);
+                }
+            };
+
+            xhr.onload = () => {
+                currentUploadXhr = null;
+                if (state.cancelled) return;
+
+                if (xhr.status === 200) {
+                    state.retryCount = 0;
+                    let resData = {};
+                    try { resData = JSON.parse(xhr.responseText); } catch (_) {}
+
+                    if (resData.status === "waiting_rx") {
+                        state.waitingRx = true;
+                        state.currentChunk = 1;
+                        $("uploadEta").textContent = "Chờ RX...";
+                        $("syncIndicator").textContent = "[⏸ CHỜ RX]";
+                        showToast("[CHUNK 0 SẴN SÀNG • CHỜ RX KẾT NỐI]");
+                        return;
+                    }
+
+                    state.currentChunk++;
+                    state.uploadNext();
+                } else if (xhr.status === 409) {
+                    hideUploadProgress();
+                    $("syncIndicator").textContent = "[BỊ KHÓA]";
+                    showLockout("TX đang bị chiếm giữ.");
+                } else if (xhr.status === 410) {
+                    hideUploadProgress();
+                    $("syncIndicator").textContent = "[RX ĐÃ NGẮT]";
+                    showToast("[BÊN NHẬN ĐÃ NGẮT KẾT NỐI]");
+                } else {
+                    handleChunkError();
+                }
+            };
+
+            xhr.onerror = () => {
+                currentUploadXhr = null;
+                if (!state.cancelled) handleChunkError();
+            };
+
+            xhr.onabort = () => {
+                currentUploadXhr = null;
+                hideUploadProgress();
+                $("syncIndicator").textContent = "[ĐÃ HỦY]";
+                showToast("[ĐÃ HỦY TẢI LÊN]");
+            };
+
+            xhr.open("POST", `/${slug}-s/chunk?conn=${cid}`);
+            xhr.setRequestHeader("X-Session-ID", state.sessionId);
+            xhr.setRequestHeader("X-File-Name", encodeURIComponent(file.name));
+            xhr.setRequestHeader("X-File-Size", file.size.toString());
+            xhr.setRequestHeader("X-Chunk-Index", idx.toString());
+            xhr.setRequestHeader("X-Total-Chunks", state.totalChunks.toString());
+            xhr.setRequestHeader("X-Chunk-Size", chunkBlob.size.toString());
+            xhr.send(chunkBlob);
+        };
+
+        function handleChunkError() {
+            if (state.cancelled) return;
+            if (state.retryCount < 3) {
+                state.retryCount++;
+                const delay = Math.pow(2, state.retryCount - 1) * 1000;
+                $("uploadEta").textContent = `Thử lại sau ${delay / 1000}s...`;
+                setTimeout(() => {
+                    if (!state.cancelled) state.uploadNext();
+                }, delay);
+            } else {
+                hideUploadProgress();
+                $("syncIndicator").textContent = "[LỖI MẠNG]";
+                showToast("[LỖI NẠP CHUNK - ĐÃ THỬ LẠI 3 LẦN]");
+            }
+        }
+
+        state.uploadNext();
     }
 
     function updateHomeQuickLinks(s) {
@@ -492,6 +674,11 @@
             currentUploadXhr.abort();
             currentUploadXhr = null;
         }
+        if (chunkUploadState) {
+            chunkUploadState.cancelled = true;
+            chunkUploadState = null;
+        }
+        fetch(`/${slug}-s/abort?conn=${getConnId()}`, { method: "POST" }).catch(() => {});
         $("activeFileName").textContent = "-";
         $("dropzoneBox").style.display = "flex";
         $("fileActiveCard").style.display = "none";
@@ -505,6 +692,14 @@
             currentUploadXhr.abort();
             currentUploadXhr = null;
         }
+        if (chunkUploadState) {
+            chunkUploadState.cancelled = true;
+            chunkUploadState = null;
+        }
+        fetch(`/${slug}-s/abort?conn=${getConnId()}`, { method: "POST" }).catch(() => {});
+        hideUploadProgress();
+        $("syncIndicator").textContent = "[ĐÃ HỦY]";
+        showToast("[ĐÃ HỦY TẢI LÊN]");
     };
 
     $("senderTextarea").oninput = autoSave;
@@ -527,6 +722,54 @@
 
     $("btnCopyCheat").onclick = () => copyText($("cheatCode").textContent);
     $("btnCopyRecvText").onclick = () => copyText($("recvTextDisplay").querySelector("code").textContent);
+    $("btnDownloadFile").onclick = async (e) => {
+        if (window.showSaveFilePicker) {
+            e.preventDefault();
+            const btn = $("btnDownloadFile");
+            const originalText = btn.textContent;
+            try {
+                const name = $("recvFileName").textContent || "download.bin";
+                const handle = await window.showSaveFilePicker({
+                    suggestedName: name
+                });
+                const writable = await handle.createWritable();
+                btn.textContent = "ĐANG TẢI VỀ MÁY...";
+                btn.style.pointerEvents = "none";
+                btn.style.opacity = "0.7";
+
+                const resp = await fetch(`/${slug}-r?conn=${getConnId()}`);
+                if (!resp.ok) {
+                    throw new Error("HTTP error " + resp.status);
+                }
+
+                if (resp.body && resp.body.pipeTo) {
+                    await resp.body.pipeTo(writable);
+                } else if (resp.body) {
+                    const reader = resp.body.getReader();
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        await writable.write(value);
+                    }
+                    await writable.close();
+                } else {
+                    const blob = await resp.blob();
+                    await writable.write(blob);
+                    await writable.close();
+                }
+                showToast("[TẢI FILE THÀNH CÔNG ✓]");
+            } catch (err) {
+                if (err.name !== "AbortError") {
+                    console.warn("Direct-to-disk error, fallback to native download:", err);
+                    location.href = `/${slug}-r?conn=${getConnId()}`;
+                }
+            } finally {
+                btn.textContent = originalText;
+                btn.style.pointerEvents = "auto";
+                btn.style.opacity = "1";
+            }
+        }
+    };
     $("btnRetryConn").onclick = () => connectSSE(true);
     $("btnUnpair").onclick = () => {
         if (confirm("Mở khóa RX?")) fetch(`/${slug}/reset-receiver`, { method: "POST" }).then(() => showToast("[ĐÃ MỞ KHÓA RX]"));

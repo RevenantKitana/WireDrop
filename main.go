@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-const Version = "v0.5.5"
+const Version = "v0.6.0"
 const defaultSlugChars = "abcdefghijklmnopqrstuvwxyz0123456789"
 
 func randomSlug(n int) string {
@@ -107,7 +107,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		next.ServeHTTP(w, r)
-		if !strings.HasSuffix(r.URL.Path, "/events") && r.URL.Path != "/health" {
+		if !strings.HasSuffix(r.URL.Path, "/events") && !strings.HasSuffix(r.URL.Path, "/chunk") && r.URL.Path != "/health" {
 			log.Printf("[%s] %s %s - %v", r.Method, r.URL.Path, getClientIP(r), time.Since(start))
 		}
 	})
@@ -118,7 +118,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Filename, X-Live")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Filename, X-Live, X-Session-ID, X-File-Name, X-File-Size, X-Chunk-Index, X-Total-Chunks, X-Chunk-Size, X-Chunk-Checksum")
 
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
@@ -182,6 +182,8 @@ func createHandler() http.Handler {
 	// 3. Quản lý trạng thái và SSE
 	mux.HandleFunc("GET /{room}/events", handleRoomEvents)
 	mux.HandleFunc("POST /{room}/reset-receiver", handleResetReceiver)
+	mux.HandleFunc("POST /{room}/chunk", handleChunkUpload)
+	mux.HandleFunc("POST /{room}/abort", handleChunkAbort)
 
 	// 4. Điều hướng thống nhất cho /{room} (bao gồm cả *-s và *-r)
 	mux.HandleFunc("GET /{room}", roomDispatcher)

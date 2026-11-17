@@ -8,8 +8,11 @@ Mọi file được đặt tên theo quy chuẩn: `NN-v0.X.Y-<slug>.md` để đ
 
 ## Danh Sách Changelog Theo Các Giai Đoạn Phát Triển:
 
+### 📦 Giai Đoạn 6: 16MB Chunked Dual-Buffering Backpressure Pipe (v0.6.x)
+* [22-v0.6.0 - 16MB Chunked Dual-Buffering Backpressure Pipe (Zero-Disk Large File Streaming)](22-v0.6.0-chunked-dual-buffering-backpressure-pipe.md) - *(2026-11-17)* 🚀 **Mới nhất (State hiện tại)**
+
 ### 🌐 Giai Đoạn 5: FastHost CLI, Windows Portable & Tự Động Hóa Cloudflare Tunnel (v0.5.x)
-* [21-v0.5.5 - Upload Dashboard Đo Tiến Trình & Tinh Giản Giao Diện Web Nhận (RX)](21-v0.5.5-upload-dashboard-and-clean-rx-ui.md) - *(2026-11-17)* 🚀 **Mới nhất (State hiện tại)**
+* [21-v0.5.5 - Upload Dashboard Đo Tiến Trình & Tinh Giản Giao Diện Web Nhận (RX)](21-v0.5.5-upload-dashboard-and-clean-rx-ui.md) - *(2026-11-17)*
 * [20-v0.5.4 - Fix Cloudflare Quick Tunnel SSE Buffering & Hybrid Snapshot Sync](20-v0.5.4-fix-sse-buffering-hybrid-sync.md) - *(2026-11-17)*
 * [19-v0.5.3 - Khắc phục nghẽn đệm Cloudflare SSE Buffering & Đồng bộ hóa thời gian thực 2 đầu](19-v0.5.3-fix-cloudtunnel-sse-matching.md) - *(2026-11-17)*
 * [18-v0.5.2 - Đóng gói Native Go Portable Windows All-in-One & Phân tách thư mục dist/](18-v0.5.2-native-portable-windows-dist.md) - *(2026-11-17)*

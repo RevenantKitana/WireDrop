@@ -2,7 +2,9 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -298,5 +300,188 @@ func TestCheckReturnsRoomSnapshot(t *testing.T) {
 	}
 	if int(data["slot_type"].(float64)) != 1 {
 		t.Errorf("Kỳ vọng slot_type 1 (text), nhận: %v", data["slot_type"])
+	}
+}
+
+func TestChunkedPingPongPipe(t *testing.T) {
+	handler := createHandler()
+	ts := httptest.NewServer(handler)
+	defer ts.Close()
+
+	slug := "testpipe"
+	sessionID := "sess_test_123"
+	fileName := "bigdata.bin"
+
+	// Tạo 3 chunks nhỏ để test (mỗi chunk 100KB, tổng 300KB)
+	chunkSize := 100 * 1024
+	totalChunks := 3
+	totalSize := int64(chunkSize * totalChunks)
+
+	chunk0Data := bytes.Repeat([]byte("A"), chunkSize)
+	chunk1Data := bytes.Repeat([]byte("B"), chunkSize)
+	chunk2Data := bytes.Repeat([]byte("C"), chunkSize)
+
+	// 1. TX nạp Chunk 0 khi RX chưa kết nối
+	req0, _ := http.NewRequest("POST", fmt.Sprintf("%s/%s-s/chunk", ts.URL, slug), bytes.NewReader(chunk0Data))
+	req0.Header.Set("X-Session-ID", sessionID)
+	req0.Header.Set("X-File-Name", fileName)
+	req0.Header.Set("X-File-Size", fmt.Sprintf("%d", totalSize))
+	req0.Header.Set("X-Chunk-Index", "0")
+	req0.Header.Set("X-Total-Chunks", fmt.Sprintf("%d", totalChunks))
+	req0.Header.Set("X-Chunk-Size", fmt.Sprintf("%d", chunkSize))
+
+	resp0, err := http.DefaultClient.Do(req0)
+	if err != nil || resp0.StatusCode != http.StatusOK {
+		t.Fatalf("Lỗi nạp chunk 0: %v, code: %d", err, resp0.StatusCode)
+	}
+	var resMap0 map[string]interface{}
+	_ = json.NewDecoder(resp0.Body).Decode(&resMap0)
+	resp0.Body.Close()
+
+	if resMap0["status"] != "waiting_rx" {
+		t.Errorf("Kỳ vọng status waiting_rx khi RX chưa cắm dây, nhận: %v", resMap0["status"])
+	}
+
+	// 2. RX cắm dây kéo file qua GET /{slug}-r trong goroutine riêng
+	rxReadChan := make(chan []byte, 1)
+	rxErrChan := make(chan error, 1)
+
+	go func() {
+		rxReq, _ := http.NewRequest("GET", fmt.Sprintf("%s/%s-r?raw=1", ts.URL, slug), nil)
+		rxResp, err := http.DefaultClient.Do(rxReq)
+		if err != nil {
+			rxErrChan <- err
+			return
+		}
+		defer rxResp.Body.Close()
+
+		if rxResp.StatusCode != http.StatusOK {
+			rxErrChan <- fmt.Errorf("RX HTTP status: %d", rxResp.StatusCode)
+			return
+		}
+
+		allData, err := io.ReadAll(rxResp.Body)
+		if err != nil {
+			rxErrChan <- err
+			return
+		}
+		rxReadChan <- allData
+	}()
+
+	// Đợi RX bắt đầu kéo Chunk 0 (chờ 50ms)
+	time.Sleep(50 * time.Millisecond)
+
+	// 3. TX nạp tiếp Chunk 1
+	req1, _ := http.NewRequest("POST", fmt.Sprintf("%s/%s-s/chunk", ts.URL, slug), bytes.NewReader(chunk1Data))
+	req1.Header.Set("X-Session-ID", sessionID)
+	req1.Header.Set("X-File-Name", fileName)
+	req1.Header.Set("X-File-Size", fmt.Sprintf("%d", totalSize))
+	req1.Header.Set("X-Chunk-Index", "1")
+	req1.Header.Set("X-Total-Chunks", fmt.Sprintf("%d", totalChunks))
+	req1.Header.Set("X-Chunk-Size", fmt.Sprintf("%d", chunkSize))
+
+	resp1, err := http.DefaultClient.Do(req1)
+	if err != nil || resp1.StatusCode != http.StatusOK {
+		t.Fatalf("Lỗi nạp chunk 1: %v", err)
+	}
+	resp1.Body.Close()
+
+	// 4. TX nạp tiếp Chunk 2 (chunk cuối)
+	req2, _ := http.NewRequest("POST", fmt.Sprintf("%s/%s-s/chunk", ts.URL, slug), bytes.NewReader(chunk2Data))
+	req2.Header.Set("X-Session-ID", sessionID)
+	req2.Header.Set("X-File-Name", fileName)
+	req2.Header.Set("X-File-Size", fmt.Sprintf("%d", totalSize))
+	req2.Header.Set("X-Chunk-Index", "2")
+	req2.Header.Set("X-Total-Chunks", fmt.Sprintf("%d", totalChunks))
+	req2.Header.Set("X-Chunk-Size", fmt.Sprintf("%d", chunkSize))
+
+	resp2, err := http.DefaultClient.Do(req2)
+	if err != nil || resp2.StatusCode != http.StatusOK {
+		t.Fatalf("Lỗi nạp chunk 2: %v", err)
+	}
+	resp2.Body.Close()
+
+	// 5. Kiểm tra dữ liệu RX nhận được
+	select {
+	case err := <-rxErrChan:
+		t.Fatalf("Lỗi phía RX kéo dữ liệu: %v", err)
+	case receivedBytes := <-rxReadChan:
+		if len(receivedBytes) != int(totalSize) {
+			t.Fatalf("Kỳ vọng nhận %d bytes, thực tế: %d bytes", totalSize, len(receivedBytes))
+		}
+		// Kiểm tra tính toàn vẹn của từng mảnh
+		expected := append(append(chunk0Data, chunk1Data...), chunk2Data...)
+		if !bytes.Equal(receivedBytes, expected) {
+			t.Errorf("Dữ liệu ghép từ 3 chunks không khớp với bản gốc!")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatalf("Quá thời gian chờ RX tải xong (Timeout)")
+	}
+}
+
+func TestChunkedAbortAndCleanup(t *testing.T) {
+	handler := createHandler()
+	ts := httptest.NewServer(handler)
+	defer ts.Close()
+
+	slug := "abortpipe"
+	sessionID := "sess_abort_999"
+	fileName := "abortfile.bin"
+	chunkSize := 1024
+	totalChunks := 5
+	totalSize := int64(chunkSize * totalChunks)
+
+	// 1. Nạp chunk 0
+	req0, _ := http.NewRequest("POST", fmt.Sprintf("%s/%s-s/chunk?conn=abort_tx", ts.URL, slug), bytes.NewReader(bytes.Repeat([]byte("X"), chunkSize)))
+	req0.Header.Set("X-Session-ID", sessionID)
+	req0.Header.Set("X-File-Name", fileName)
+	req0.Header.Set("X-File-Size", fmt.Sprintf("%d", totalSize))
+	req0.Header.Set("X-Chunk-Index", "0")
+	req0.Header.Set("X-Total-Chunks", fmt.Sprintf("%d", totalChunks))
+	req0.Header.Set("X-Chunk-Size", fmt.Sprintf("%d", chunkSize))
+
+	resp0, err := http.DefaultClient.Do(req0)
+	if err != nil || resp0.StatusCode != http.StatusOK {
+		t.Fatalf("Lỗi nạp chunk 0: %v", err)
+	}
+	resp0.Body.Close()
+
+	// 2. Pre-check xác nhận session đang giữ file
+	checkReq, _ := http.NewRequest("GET", fmt.Sprintf("%s/%s/events?role=receiver&conn=abort_rx&check=1", ts.URL, slug), nil)
+	checkResp, err := http.DefaultClient.Do(checkReq)
+	if err != nil || checkResp.StatusCode != http.StatusOK {
+		t.Fatalf("Lỗi check: %v", err)
+	}
+	var checkData map[string]interface{}
+	_ = json.NewDecoder(checkResp.Body).Decode(&checkData)
+	checkResp.Body.Close()
+
+	if checkData["chunked"] != true {
+		t.Errorf("Kỳ vọng chunked == true, nhận: %v", checkData["chunked"])
+	}
+
+	// 3. Sender gửi lệnh Abort
+	abortReq, _ := http.NewRequest("POST", fmt.Sprintf("%s/%s-s/abort?conn=abort_tx", ts.URL, slug), nil)
+	abortResp, err := http.DefaultClient.Do(abortReq)
+	if err != nil || abortResp.StatusCode != http.StatusOK {
+		t.Fatalf("Lỗi abort: %v", err)
+	}
+	abortResp.Body.Close()
+
+	// 4. Pre-check xác nhận slot đã được giải phóng hoàn toàn về Empty (slot_type = 0)
+	checkReq2, _ := http.NewRequest("GET", fmt.Sprintf("%s/%s/events?role=receiver&conn=abort_rx&check=1", ts.URL, slug), nil)
+	checkResp2, err := http.DefaultClient.Do(checkReq2)
+	if err != nil || checkResp2.StatusCode != http.StatusOK {
+		t.Fatalf("Lỗi check sau abort: %v", err)
+	}
+	var checkData2 map[string]interface{}
+	_ = json.NewDecoder(checkResp2.Body).Decode(&checkData2)
+	checkResp2.Body.Close()
+
+	if int(checkData2["slot_type"].(float64)) != 0 {
+		t.Errorf("Kỳ vọng slot_type = 0 sau abort, nhận: %v", checkData2["slot_type"])
+	}
+	if checkData2["chunked"] == true {
+		t.Errorf("Kỳ vọng chunked == false sau abort, nhận true")
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -68,7 +69,7 @@ func handleSender(w http.ResponseWriter, r *http.Request) {
 		slotType := "empty"
 		if room.Slot.Type == PayloadText {
 			slotType = "text"
-		} else if room.Slot.Type == PayloadFile {
+		} else if room.Slot.Type == PayloadFile || room.Slot.Type == PayloadChunkStream {
 			slotType = "file"
 		}
 		isHeld := room.SenderConn != nil
@@ -275,8 +276,8 @@ func handleReceiver(w http.ResponseWriter, r *http.Request) {
 	slot := room.Slot
 	shouldBurn := room.BurnAfterRead
 
-	// Nếu bật Burn-After-Read: rút cạn slot sau khi phục vụ
-	if shouldBurn {
+	// Nếu bật Burn-After-Read: rút cạn slot sau khi phục vụ (trừ trường hợp ChunkStream cần stream qua nhiều vòng)
+	if shouldBurn && slot.Type != PayloadChunkStream {
 		room.Slot = PipeSlot{Type: PayloadEmpty}
 	}
 	room.Unlock()
@@ -320,6 +321,57 @@ func handleReceiver(w http.ResponseWriter, r *http.Request) {
 		if shouldBurn {
 			room.BroadcastSSE("payload_cleared", "")
 		}
+
+	case PayloadChunkStream:
+		// Phục vụ file cắt mảnh 16MB stream liên tục sang RX
+		sess := room.GetChunkSession()
+		if sess == nil {
+			http.Error(w, "Chunk session expired", http.StatusGone)
+			return
+		}
+
+		sess.Lock()
+		if sess.idleTimer != nil {
+			sess.idleTimer.Stop()
+		}
+		sess.Unlock()
+
+		room.BroadcastSSE("rx_connected", "")
+
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filepath.Base(sess.FileName)))
+		if sess.TotalSize > 0 {
+			w.Header().Set("Content-Length", fmt.Sprintf("%d", sess.TotalSize))
+		}
+		w.Header().Set("X-Accel-Buffering", "no")
+
+		flusher, ok := w.(http.Flusher)
+		for i := 0; i < sess.TotalChunks; i++ {
+			chunk, okChunk, errStr := sess.PopChunk(ChunkStallLimit)
+			if !okChunk {
+				sess.Cancel(errStr)
+				return
+			}
+
+			_, writeErr := w.Write(chunk.Data)
+			if ok {
+				flusher.Flush()
+			}
+			if writeErr != nil {
+				sess.Cancel("RX connection terminated")
+				return
+			}
+
+			ackData, _ := json.Marshal(map[string]interface{}{
+				"type":  "chunk_ack",
+				"index": chunk.Index,
+				"total": sess.TotalChunks,
+			})
+			room.BroadcastSSE("chunk_ack", string(ackData))
+		}
+
+		room.ClearSlot()
+		room.BroadcastSSE("payload_cleared", "")
 
 	default:
 		// Khe cắm đang rỗng: Trả về comment an toàn, không báo lỗi PowerShell iex
@@ -424,6 +476,15 @@ func handleRoomEvents(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		room.RLock()
+		slotType := room.Slot.Type
+		isChunked := (slotType == PayloadChunkStream)
+		if isChunked {
+			slotType = PayloadFile
+		}
+		totalChunks := 0
+		if room.ChunkSess != nil {
+			totalChunks = room.ChunkSess.TotalChunks
+		}
 		respData := map[string]interface{}{
 			"status":          "ok",
 			"slug":            room.Slug,
@@ -431,10 +492,12 @@ func handleRoomEvents(w http.ResponseWriter, r *http.Request) {
 			"receiver_paired": room.ReceiverConn != nil,
 			"paired":          room.ReceiverConn != nil,
 			"burn":            room.BurnAfterRead,
-			"slot_type":       room.Slot.Type,
+			"slot_type":       slotType,
 			"slot_text":       room.Slot.TextData,
 			"slot_file_name":  room.Slot.FileName,
 			"slot_file_size":  room.Slot.FileSize,
+			"chunked":         isChunked,
+			"total_chunks":    totalChunks,
 		}
 		room.RUnlock()
 		_ = json.NewEncoder(w).Encode(respData)
@@ -486,16 +549,27 @@ func handleRoomEvents(w http.ResponseWriter, r *http.Request) {
 
 	// Gửi trạng thái ban đầu của sợi dây
 	room.RLock()
+	initSlotType := room.Slot.Type
+	initChunked := (initSlotType == PayloadChunkStream)
+	if initChunked {
+		initSlotType = PayloadFile
+	}
+	initTotalChunks := 0
+	if room.ChunkSess != nil {
+		initTotalChunks = room.ChunkSess.TotalChunks
+	}
 	initData, _ := json.Marshal(map[string]interface{}{
 		"slug":            room.Slug,
 		"sender_paired":   room.SenderConn != nil,
 		"receiver_paired": room.ReceiverConn != nil,
 		"paired":          room.ReceiverConn != nil,
 		"burn":            room.BurnAfterRead,
-		"slot_type":       room.Slot.Type,
+		"slot_type":       initSlotType,
 		"slot_text":       room.Slot.TextData,
 		"slot_file_name":  room.Slot.FileName,
 		"slot_file_size":  room.Slot.FileSize,
+		"chunked":         initChunked,
+		"total_chunks":    initTotalChunks,
 	})
 	room.RUnlock()
 
@@ -534,6 +608,141 @@ func handleResetReceiver(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "Receiver unpaired"})
+}
+
+// handleChunkUpload tiếp nhận từng khối 16MB từ Bên Gửi (TX)
+func handleChunkUpload(w http.ResponseWriter, r *http.Request) {
+	slug := strings.ToLower(r.PathValue("room"))
+	slug = strings.TrimSuffix(slug, "-s")
+	slug = strings.TrimSuffix(slug, "-r")
+	if slug == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	room := globalRooms.GetOrCreate(slug)
+	room.Touch()
+
+	connID := getConnID(r)
+	allowed, errMsg := room.CheckSenderAuth(connID)
+	if !allowed {
+		http.Error(w, errMsg, http.StatusConflict)
+		return
+	}
+
+	sessionID := r.Header.Get("X-Session-ID")
+	fileName := r.Header.Get("X-File-Name")
+	if fileName == "" {
+		fileName = "unnamed.bin"
+	}
+	totalSize, _ := strconv.ParseInt(r.Header.Get("X-File-Size"), 10, 64)
+	chunkIndex, _ := strconv.Atoi(r.Header.Get("X-Chunk-Index"))
+	totalChunks, _ := strconv.Atoi(r.Header.Get("X-Total-Chunks"))
+	if totalChunks <= 0 {
+		totalChunks = 1
+	}
+
+	// Đọc chunk body (tối đa 16MB + 4KB buffer)
+	r.Body = http.MaxBytesReader(w, r.Body, int64(ChunkSize+4096))
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Chunk read error", http.StatusBadRequest)
+		return
+	}
+
+	var sess *ChunkSession
+	if chunkIndex == 0 {
+		sess = room.StartChunkSession(sessionID, fileName, totalSize, totalChunks)
+		// Báo cho Web UI biết có file lớn dạng Chunked
+		fileEvt, _ := json.Marshal(map[string]interface{}{
+			"type":         "file",
+			"name":         fileName,
+			"size":         totalSize,
+			"chunked":      true,
+			"total_chunks": totalChunks,
+		})
+		room.BroadcastSSE("payload_updated", string(fileEvt))
+
+		// Cài đặt Timer 10 phút hủy slot nếu RX không cắm dây
+		room.RLock()
+		rxConnected := (room.ReceiverConn != nil)
+		room.RUnlock()
+		if !rxConnected {
+			sess.Lock()
+			sess.idleTimer = time.AfterFunc(ChunkIdleHold, func() {
+				room.ClearSlot()
+				room.BroadcastSSE("session_timeout", "10 minutes idle")
+				room.BroadcastSSE("payload_cleared", "")
+			})
+			sess.Unlock()
+		}
+	} else {
+		sess = room.GetChunkSession()
+		if sess == nil || sess.SessionID != sessionID {
+			http.Error(w, "Chunk session expired or invalid", http.StatusGone)
+			return
+		}
+	}
+
+	// Đẩy chunk vào Buffer (chặn nếu buffer 2 slots đầy cho đến khi RX tiêu thụ)
+	ok, pushErr := sess.PushChunk(&ChunkItem{
+		Index:    chunkIndex,
+		Data:     data,
+		Size:     len(data),
+		Checksum: r.Header.Get("X-Chunk-Checksum"),
+	}, ChunkStallLimit)
+
+	if !ok {
+		http.Error(w, pushErr, http.StatusGone)
+		return
+	}
+
+	room.RLock()
+	rxOnline := (room.ReceiverConn != nil)
+	room.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	if chunkIndex == 0 && !rxOnline {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":       "waiting_rx",
+			"chunk":        chunkIndex,
+			"rx_online":    false,
+			"next_allowed": chunkIndex + 1,
+			"message":      "Chunk 0 buffered. Waiting for receiver.",
+		})
+		return
+	}
+
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":       "ok",
+		"chunk":        chunkIndex,
+		"rx_online":    rxOnline,
+		"next_allowed": chunkIndex + 1,
+	})
+}
+
+// handleChunkAbort hủy phiên truyền file do Bên Gửi yêu cầu
+func handleChunkAbort(w http.ResponseWriter, r *http.Request) {
+	slug := strings.ToLower(r.PathValue("room"))
+	slug = strings.TrimSuffix(slug, "-s")
+	slug = strings.TrimSuffix(slug, "-r")
+
+	room, exists := globalRooms.Get(slug)
+	if exists {
+		connID := getConnID(r)
+		if connID != "" {
+			allowed, _ := room.CheckSenderAuth(connID)
+			if !allowed {
+				http.Error(w, "Unauthorized sender", http.StatusConflict)
+				return
+			}
+		}
+		room.ClearSlot()
+		room.BroadcastSSE("payload_cleared", "")
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "Session aborted"})
 }
 
 // handleInitScriptLinux trả về script bootstrap tạo phím tắt 'r' cho Linux (/i)
