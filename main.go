@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-const Version = "v0.6.2"
+const Version = "v0.7.0"
 const defaultSlugChars = "abcdefghijklmnopqrstuvwxyz0123456789"
 
 func randomSlug(n int) string {
@@ -118,8 +118,8 @@ func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Filename, X-Live, X-Session-ID, X-File-Name, X-File-Size, X-Chunk-Index, X-Total-Chunks, X-Chunk-Size, X-Chunk-Checksum")
-		w.Header().Set("Access-Control-Expose-Headers", "Content-Length, Content-Disposition, X-File-Size, X-Total-Chunks, X-Chunk-Index")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Filename, X-Live, X-Session-ID, X-File-Name, X-File-Size, X-Chunk-Index, X-Total-Chunks, X-Chunk-Size, X-Byte-Offset, X-Chunk-Checksum")
+		w.Header().Set("Access-Control-Expose-Headers", "Content-Length, Content-Disposition, X-File-Size, X-Total-Chunks, X-Chunk-Index, X-Chunk-Size")
 
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)

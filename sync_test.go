@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os/exec"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -668,5 +669,308 @@ func TestEncodedUTF8FileNameInChunkedUpload(t *testing.T) {
 
 	if snap["slot_file_name"] != origName {
 		t.Errorf("Tên file chưa được giải mã đúng! Kỳ vọng %q, nhận %q", origName, snap["slot_file_name"])
+	}
+}
+
+func TestTurboSubChunkStreamingTTFB(t *testing.T) {
+	handler := createHandler()
+	ts := httptest.NewServer(handler)
+	defer ts.Close()
+
+	slug := "turbottfb"
+	chunkSize := 1024 * 1024 // 1MB (4 x 256KB sub-chunks)
+	totalChunks := 1
+	totalSize := int64(chunkSize)
+
+	// TX tạo io.Pipe để kiểm soát việc gửi dữ liệu theo từng nhát 256KB
+	pr, pw := io.Pipe()
+	defer pw.Close()
+
+	first256KB := bytes.Repeat([]byte("A"), 256*1024)
+	rest768KB := bytes.Repeat([]byte("B"), 768*1024)
+
+	uploadErrChan := make(chan error, 1)
+	go func() {
+		req, _ := http.NewRequest("POST", fmt.Sprintf("%s/%s-s/chunk?conn=tx_ttfb", ts.URL, slug), pr)
+		req.Header.Set("X-Session-ID", "sess_ttfb")
+		req.Header.Set("X-File-Name", "stream_test.bin")
+		req.Header.Set("X-File-Size", fmt.Sprintf("%d", totalSize))
+		req.Header.Set("X-Chunk-Index", "0")
+		req.Header.Set("X-Total-Chunks", fmt.Sprintf("%d", totalChunks))
+		req.Header.Set("X-Chunk-Size", fmt.Sprintf("%d", chunkSize))
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			uploadErrChan <- err
+			return
+		}
+		resp.Body.Close()
+		uploadErrChan <- nil
+	}()
+
+	// 1. TX chỉ mới bơm 256KB đầu tiên vào pipe (chưa đóng pipe, chưa xong 1MB)
+	go func() {
+		_, _ = pw.Write(first256KB)
+	}()
+
+	// Chờ server nhận request upload và chuyển slot sang PayloadChunkStream
+	for i := 0; i < 50; i++ {
+		r, ok := globalRooms.Get(slug)
+		if ok {
+			r.RLock()
+			isChunk := (r.Slot.Type == PayloadChunkStream)
+			r.RUnlock()
+			if isChunk {
+				break
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// 2. RX cắm dây nhận
+	rxReq, _ := http.NewRequest("GET", fmt.Sprintf("%s/%s-r?conn=rx_ttfb", ts.URL, slug), nil)
+	rxResp, err := http.DefaultClient.Do(rxReq)
+	if err != nil || rxResp.StatusCode != http.StatusOK {
+		t.Fatalf("Lỗi kết nối RX: %v", err)
+	}
+	defer rxResp.Body.Close()
+
+	// 3. RX đọc 256KB đầu tiên ngay khi TX chưa gửi phần còn lại (chứng minh TTFB tức thì)
+	buf256 := make([]byte, 256*1024)
+	n, err := io.ReadFull(rxResp.Body, buf256)
+	if err != nil || n != len(buf256) {
+		t.Fatalf("RX không đọc được 256KB đầu: n=%d, err=%v", n, err)
+	}
+	if !bytes.Equal(buf256, first256KB) {
+		t.Errorf("256KB đầu tiên không khớp!")
+	}
+
+	// 4. Giờ TX mới bơm nốt 768KB còn lại và đóng pipe hoàn tất upload
+	_, _ = pw.Write(rest768KB)
+	_ = pw.Close()
+
+	if uploadErr := <-uploadErrChan; uploadErr != nil {
+		t.Fatalf("Upload thất bại: %v", uploadErr)
+	}
+
+	// 5. RX đọc nốt phần còn lại
+	bufRest, err := io.ReadAll(rxResp.Body)
+	if err != nil || len(bufRest) != len(rest768KB) {
+		t.Fatalf("RX đọc phần còn lại thất bại: len=%d, err=%v", len(bufRest), err)
+	}
+	if !bytes.Equal(bufRest, rest768KB) {
+		t.Errorf("768KB còn lại không khớp!")
+	}
+}
+
+func TestParallelChunkPipelining(t *testing.T) {
+	handler := createHandler()
+	ts := httptest.NewServer(handler)
+	defer ts.Close()
+
+	slug := "turbopipe"
+	chunkSize := 512 * 1024 // 512KB mỗi chunk
+	totalChunks := 3
+	totalSize := int64(chunkSize * totalChunks)
+
+	chunk0Data := bytes.Repeat([]byte("0"), chunkSize)
+	chunk1Data := bytes.Repeat([]byte("1"), chunkSize)
+	chunk2Data := bytes.Repeat([]byte("2"), chunkSize)
+
+	// 1. Nạp trước chunk 0 (bước khởi tạo phiên)
+	req0, _ := http.NewRequest("POST", fmt.Sprintf("%s/%s-s/chunk?conn=tx_pipe", ts.URL, slug), bytes.NewReader(chunk0Data))
+	req0.Header.Set("X-Session-ID", "sess_pipeline")
+	req0.Header.Set("X-File-Name", "pipeline.bin")
+	req0.Header.Set("X-File-Size", fmt.Sprintf("%d", totalSize))
+	req0.Header.Set("X-Chunk-Index", "0")
+	req0.Header.Set("X-Total-Chunks", "3")
+	req0.Header.Set("X-Chunk-Size", fmt.Sprintf("%d", chunkSize))
+
+	resp0, err := http.DefaultClient.Do(req0)
+	if err != nil || resp0.StatusCode != http.StatusOK {
+		t.Fatalf("Nạp chunk 0 lỗi: %v", err)
+	}
+	resp0.Body.Close()
+
+	// 2. RX cắm vào đọc luồng
+	rxDataChan := make(chan []byte, 1)
+	rxErrChan := make(chan error, 1)
+	go func() {
+		rxReq, _ := http.NewRequest("GET", fmt.Sprintf("%s/%s-r?conn=rx_pipe", ts.URL, slug), nil)
+		rxResp, err := http.DefaultClient.Do(rxReq)
+		if err != nil {
+			rxErrChan <- err
+			return
+		}
+		defer rxResp.Body.Close()
+		allData, err := io.ReadAll(rxResp.Body)
+		if err != nil {
+			rxErrChan <- err
+			return
+		}
+		rxDataChan <- allData
+	}()
+
+	// 3. TX nạp song song 2 luồng (Chunk 1 và Chunk 2 cùng lúc!)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	uploadErr := make(chan error, 2)
+
+	go func() {
+		defer wg.Done()
+		req1, _ := http.NewRequest("POST", fmt.Sprintf("%s/%s-s/chunk?conn=tx_pipe", ts.URL, slug), bytes.NewReader(chunk1Data))
+		req1.Header.Set("X-Session-ID", "sess_pipeline")
+		req1.Header.Set("X-File-Name", "pipeline.bin")
+		req1.Header.Set("X-File-Size", fmt.Sprintf("%d", totalSize))
+		req1.Header.Set("X-Chunk-Index", "1")
+		req1.Header.Set("X-Total-Chunks", "3")
+		req1.Header.Set("X-Chunk-Size", fmt.Sprintf("%d", chunkSize))
+		r1, e1 := http.DefaultClient.Do(req1)
+		if e1 != nil || r1.StatusCode != http.StatusOK {
+			uploadErr <- fmt.Errorf("chunk 1 upload err: %v", e1)
+			return
+		}
+		r1.Body.Close()
+	}()
+
+	go func() {
+		defer wg.Done()
+		req2, _ := http.NewRequest("POST", fmt.Sprintf("%s/%s-s/chunk?conn=tx_pipe", ts.URL, slug), bytes.NewReader(chunk2Data))
+		req2.Header.Set("X-Session-ID", "sess_pipeline")
+		req2.Header.Set("X-File-Name", "pipeline.bin")
+		req2.Header.Set("X-File-Size", fmt.Sprintf("%d", totalSize))
+		req2.Header.Set("X-Chunk-Index", "2")
+		req2.Header.Set("X-Total-Chunks", "3")
+		req2.Header.Set("X-Chunk-Size", fmt.Sprintf("%d", chunkSize))
+		r2, e2 := http.DefaultClient.Do(req2)
+		if e2 != nil || r2.StatusCode != http.StatusOK {
+			uploadErr <- fmt.Errorf("chunk 2 upload err: %v", e2)
+			return
+		}
+		r2.Body.Close()
+	}()
+
+	wg.Wait()
+	close(uploadErr)
+	for e := range uploadErr {
+		t.Fatalf("Lỗi song song upload: %v", e)
+	}
+
+	// 4. Kiểm tra RX nhận đúng toàn vẹn thứ tự byte
+	select {
+	case err := <-rxErrChan:
+		t.Fatalf("RX kéo lỗi: %v", err)
+	case received := <-rxDataChan:
+		expected := append(append(chunk0Data, chunk1Data...), chunk2Data...)
+		if !bytes.Equal(received, expected) {
+			t.Errorf("Dữ liệu nhận từ Pipelining 2 luồng không khớp bản gốc!")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatalf("Timeout chờ RX kéo xong")
+	}
+}
+
+func TestMidChunkRetryDeduplication(t *testing.T) {
+	handler := createHandler()
+	ts := httptest.NewServer(handler)
+	defer ts.Close()
+
+	slug := "turboretry"
+	chunkSize := 1024 * 1024 // 1MB
+	totalChunks := 2
+	totalSize := int64(chunkSize * totalChunks)
+
+	chunk0Data := bytes.Repeat([]byte("0"), chunkSize)
+	chunk1SubA := bytes.Repeat([]byte("A"), 256*1024)
+	chunk1SubB := bytes.Repeat([]byte("B"), 768*1024)
+	chunk1Full := append(chunk1SubA, chunk1SubB...)
+
+	// 1. Nạp Chunk 0
+	req0, _ := http.NewRequest("POST", fmt.Sprintf("%s/%s-s/chunk?conn=tx_retry", ts.URL, slug), bytes.NewReader(chunk0Data))
+	req0.Header.Set("X-Session-ID", "sess_retry")
+	req0.Header.Set("X-File-Name", "retry.bin")
+	req0.Header.Set("X-File-Size", fmt.Sprintf("%d", totalSize))
+	req0.Header.Set("X-Chunk-Index", "0")
+	req0.Header.Set("X-Total-Chunks", "2")
+	req0.Header.Set("X-Chunk-Size", fmt.Sprintf("%d", chunkSize))
+
+	resp0, err := http.DefaultClient.Do(req0)
+	if err != nil || resp0.StatusCode != http.StatusOK {
+		t.Fatalf("Nạp chunk 0 lỗi: %v", err)
+	}
+	resp0.Body.Close()
+
+	// 2. RX bắt đầu đọc
+	rxDataChan := make(chan []byte, 1)
+	rxErrChan := make(chan error, 1)
+	go func() {
+		rxReq, _ := http.NewRequest("GET", fmt.Sprintf("%s/%s-r?conn=rx_retry", ts.URL, slug), nil)
+		rxResp, err := http.DefaultClient.Do(rxReq)
+		if err != nil {
+			rxErrChan <- err
+			return
+		}
+		defer rxResp.Body.Close()
+		all, err := io.ReadAll(rxResp.Body)
+		if err != nil {
+			rxErrChan <- err
+			return
+		}
+		rxDataChan <- all
+	}()
+
+	// 3. TX bắt đầu nạp Chunk 1 qua pipe, chỉ bơm 256KB đầu rồi ngắt kết nối giả lập đứt mạng
+	pr1, pw1 := io.Pipe()
+	go func() {
+		_, _ = pw1.Write(chunk1SubA)
+		time.Sleep(50 * time.Millisecond)
+		_ = pw1.CloseWithError(fmt.Errorf("simulated network drop mid-chunk"))
+	}()
+
+	req1Fail, _ := http.NewRequest("POST", fmt.Sprintf("%s/%s-s/chunk?conn=tx_retry", ts.URL, slug), pr1)
+	req1Fail.Header.Set("X-Session-ID", "sess_retry")
+	req1Fail.Header.Set("X-File-Name", "retry.bin")
+	req1Fail.Header.Set("X-File-Size", fmt.Sprintf("%d", totalSize))
+	req1Fail.Header.Set("X-Chunk-Index", "1")
+	req1Fail.Header.Set("X-Total-Chunks", "2")
+	req1Fail.Header.Set("X-Chunk-Size", fmt.Sprintf("%d", chunkSize))
+	_, _ = http.DefaultClient.Do(req1Fail)
+
+	// Đợi 50ms để server xả 256KB xuống socket của RX và cập nhật FlushedTotalBytes
+	time.Sleep(50 * time.Millisecond)
+
+	// 4. TX retry lại trọn vẹn Chunk 1 từ byte 0
+	req1Retry, _ := http.NewRequest("POST", fmt.Sprintf("%s/%s-s/chunk?conn=tx_retry", ts.URL, slug), bytes.NewReader(chunk1Full))
+	req1Retry.Header.Set("X-Session-ID", "sess_retry")
+	req1Retry.Header.Set("X-File-Name", "retry.bin")
+	req1Retry.Header.Set("X-File-Size", fmt.Sprintf("%d", totalSize))
+	req1Retry.Header.Set("X-Chunk-Index", "1")
+	req1Retry.Header.Set("X-Total-Chunks", "2")
+	req1Retry.Header.Set("X-Chunk-Size", fmt.Sprintf("%d", chunkSize))
+
+	respRetry, err := http.DefaultClient.Do(req1Retry)
+	if err != nil {
+		t.Fatalf("Retry chunk 1 err: %v", err)
+	}
+	retryBody, _ := io.ReadAll(respRetry.Body)
+	respRetry.Body.Close()
+	if respRetry.StatusCode != http.StatusOK {
+		t.Fatalf("Retry chunk 1 status: %d, body: %s", respRetry.StatusCode, string(retryBody))
+	}
+
+	// 5. Kiểm tra dữ liệu RX nhận được: Không bị trùng lặp 256KB đầu, dữ liệu khớp 100%
+	select {
+	case err := <-rxErrChan:
+		t.Fatalf("RX kéo lỗi: %v", err)
+	case received := <-rxDataChan:
+		expected := append(chunk0Data, chunk1Full...)
+		if len(received) != len(expected) {
+			t.Fatalf("Độ dài nhận được %d != kỳ vọng %d (Có thể bị lặp byte do retry!)", len(received), len(expected))
+		}
+		if !bytes.Equal(received, expected) {
+			t.Errorf("Dữ liệu sau khi retry bị lệch byte!")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatalf("Timeout chờ RX kéo xong")
 	}
 }

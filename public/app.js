@@ -118,7 +118,7 @@
                             chunkUploadState.waitingRx = false;
                             $("uploadEta").textContent = "Đang truyền...";
                             showToast("[RX ĐÃ KẾT NỐI • TIẾP TỤC ĐẨY FILE]");
-                            chunkUploadState.uploadNext();
+                            (chunkUploadState.dispatch || chunkUploadState.uploadNext)();
                         }
                         if (!isSender) {
                             if (!isDownloadingRx) renderPayload(d);
@@ -161,7 +161,7 @@
                 if (chunkUploadState && chunkUploadState.waitingRx) {
                     chunkUploadState.waitingRx = false;
                     $("uploadEta").textContent = "Đang truyền...";
-                    chunkUploadState.uploadNext();
+                    (chunkUploadState.dispatch || chunkUploadState.uploadNext)();
                 }
             }
         });
@@ -177,7 +177,7 @@
                 if (chunkUploadState && chunkUploadState.waitingRx) {
                     chunkUploadState.waitingRx = false;
                     $("uploadEta").textContent = "Đang truyền...";
-                    chunkUploadState.uploadNext();
+                    (chunkUploadState.dispatch || chunkUploadState.uploadNext)();
                 }
             }
         });
@@ -293,6 +293,12 @@
         updateCheatCode();
     }
 
+    function getOptimalChunkSize(fileSize) {
+        if (!fileSize || fileSize <= 64 * 1024 * 1024) return 8 * 1024 * 1024;   // <= 64MB: 8MB/mảnh
+        if (fileSize <= 512 * 1024 * 1024) return 16 * 1024 * 1024;              // <= 512MB: 16MB/mảnh
+        return 32 * 1024 * 1024;                                                  // > 512MB: 32MB/mảnh
+    }
+
     function showActiveFile(name, size, totalChunks) {
         showFileDropzone();
         $("dropzoneBox").style.display = "none";
@@ -303,9 +309,10 @@
         const batchRow = $("activeFileBatchRow");
         const batchInfo = $("activeFileBatchInfo");
         if (batchRow && batchInfo) {
-            const tChunks = totalChunks || Math.max(1, Math.ceil((size || 0) / CHUNK_SIZE));
+            const cSize = getOptimalChunkSize(size || 0);
+            const tChunks = totalChunks || Math.max(1, Math.ceil((size || 0) / cSize));
             batchRow.style.display = "flex";
-            batchInfo.textContent = tChunks > 1 ? `${tChunks} Mảnh (16MB/mảnh) • Sẵn sàng` : `1 Mảnh duy nhất (${fmtSize(size)}) • Sẵn sàng`;
+            batchInfo.textContent = tChunks > 1 ? `${tChunks} Mảnh (${fmtSize(cSize)}/mảnh) • Sẵn sàng` : `1 Mảnh duy nhất (${fmtSize(size)}) • Sẵn sàng`;
         }
         updateCheatCode();
     }
@@ -318,8 +325,9 @@
     }
 
     function showRecvFile(name, size, totalChunks) {
-        const tChunks = totalChunks || Math.max(1, Math.ceil((size || 0) / CHUNK_SIZE));
-        recvCurrentFile = { name, size, totalChunks: tChunks };
+        const cSize = getOptimalChunkSize(size || 0);
+        const tChunks = totalChunks || Math.max(1, Math.ceil((size || 0) / cSize));
+        recvCurrentFile = { name, size, totalChunks: tChunks, chunkSize: cSize };
 
         $("recvTextSection").style.display = "none";
         $("recvFileSection").style.display = "flex";
@@ -330,7 +338,7 @@
         $("recvFileSize").textContent = fmtSize(size);
         const batchNote = $("recvFileBatchNote");
         if (batchNote) {
-            batchNote.textContent = tChunks > 1 ? `Đa Mảnh: ${tChunks} mảnh × 16MB` : `Đơn Mảnh: 1 mảnh nguyên vẹn (${fmtSize(size)})`;
+            batchNote.textContent = tChunks > 1 ? `Đa Mảnh: ${tChunks} mảnh × ${fmtSize(cSize)}` : `Đơn Mảnh: 1 mảnh nguyên vẹn (${fmtSize(size)})`;
         }
         $("btnCopyRecvText").style.display = "none";
     }
@@ -345,7 +353,7 @@
         $("btnCopyRecvText").style.display = "inline-block";
     }
 
-    function renderBatchGrid(containerId, totalChunks, activeIndex, mode) {
+    function renderBatchGrid(containerId, totalChunks, activeIndices, mode) {
         const container = $(containerId);
         if (!container) return;
         if (!totalChunks || totalChunks <= 0) {
@@ -358,17 +366,20 @@
 
         const maxVisible = 32;
         const count = Math.min(totalChunks, maxVisible);
+        const activeList = Array.isArray(activeIndices) ? activeIndices : (typeof activeIndices === "number" ? [activeIndices] : []);
+        const activeSet = new Set(activeList);
+        const minActive = activeList.length > 0 ? Math.min(...activeList) : (totalChunks + 1);
 
         for (let i = 0; i < count; i++) {
             const chip = document.createElement("span");
             chip.className = "batch-chip";
             const num = i + 1;
-            if (i < activeIndex) {
-                chip.classList.add("done");
-                chip.textContent = `✓ Mảnh ${num}`;
-            } else if (i === activeIndex) {
+            if (activeSet.has(i)) {
                 chip.classList.add("active");
                 chip.textContent = mode === "uploading" ? `⟳ Nạp ${num}` : `⬇ Nhận ${num}`;
+            } else if (i < minActive) {
+                chip.classList.add("done");
+                chip.textContent = `✓ Mảnh ${num}`;
             } else {
                 chip.classList.add("waiting");
                 chip.textContent = `Mảnh ${num}`;
@@ -463,86 +474,124 @@
         }
         if (chunkUploadState) {
             chunkUploadState.cancelled = true;
+            if (chunkUploadState.xhrMap) {
+                chunkUploadState.xhrMap.forEach(x => { try { x.abort(); } catch (_) {} });
+            }
             chunkUploadState = null;
         }
 
-        const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
+        const chunkSize = getOptimalChunkSize(file.size);
+        const totalChunks = Math.max(1, Math.ceil(file.size / chunkSize));
         const sessionId = "sess_" + slug + "_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 7);
         const cid = getConnId();
 
         showUploadProgress(file.name, file.size);
         $("syncIndicator").textContent = "[NẠP: 0%]";
-        renderBatchGrid("txBatchContainer", totalChunks, 0, "uploading");
+        renderBatchGrid("txBatchContainer", totalChunks, [0], "uploading");
 
         const state = {
             file,
+            chunkSize,
             sessionId,
             cid,
             totalChunks,
-            currentChunk: 0,
+            nextChunkToDispatch: 0,
+            activeWorkers: 0,
+            activeIndices: new Set(),
+            xhrMap: new Map(),
+            chunkTransferred: new Array(totalChunks).fill(0),
+            chunkCompleted: new Array(totalChunks).fill(false),
+            retryCounts: new Array(totalChunks).fill(0),
             cancelled: false,
             waitingRx: false,
             startTime: Date.now(),
-            retryCount: 0,
-            uploadNext: null
+            dispatch: null
         };
         chunkUploadState = state;
 
-        state.uploadNext = function () {
+        function updateProgress() {
             if (state.cancelled) return;
-            if (state.currentChunk >= state.totalChunks) {
+            const currentTotalTransferred = Math.min(file.size, state.chunkTransferred.reduce((a, b) => a + b, 0));
+            const percent = Math.min(100, Math.round((currentTotalTransferred / file.size) * 100));
+            const elapsedSec = (Date.now() - state.startTime) / 1000;
+            let speedBytes = 0;
+            if (elapsedSec > 0.2) speedBytes = currentTotalTransferred / elapsedSec;
+
+            let etaStr = "--";
+            if (speedBytes > 0 && currentTotalTransferred < file.size) {
+                const remainingSec = Math.round((file.size - currentTotalTransferred) / speedBytes);
+                if (remainingSec < 60) etaStr = `~${remainingSec}s`;
+                else etaStr = `~${Math.floor(remainingSec / 60)}m ${remainingSec % 60}s`;
+            } else if (percent === 100) {
+                etaStr = "Xử lý...";
+            }
+
+            const activeList = Array.from(state.activeIndices).sort((a, b) => a - b);
+            const activeDisplay = activeList.length > 0 ? activeList.map(n => n + 1).join("&") : state.totalChunks;
+            updateUploadProgressUI(percent, currentTotalTransferred, file.size, speedBytes, etaStr, activeDisplay, state.totalChunks);
+            renderBatchGrid("txBatchContainer", state.totalChunks, activeList, "uploading");
+        }
+
+        state.dispatch = function () {
+            if (state.cancelled || state.waitingRx) return;
+
+            const completedCount = state.chunkCompleted.filter(Boolean).length;
+            if (completedCount >= state.totalChunks) {
                 showActiveFile(file.name, file.size, state.totalChunks);
                 $("syncIndicator").textContent = "[ĐÃ NẠP ✓]";
                 showToast(`[ĐÃ NẠP ${file.name}]`);
-                renderBatchGrid("txBatchContainer", state.totalChunks, state.totalChunks, "uploading");
+                renderBatchGrid("txBatchContainer", state.totalChunks, [], "uploading");
                 chunkUploadState = null;
                 return;
             }
 
-            const idx = state.currentChunk;
-            const start = idx * CHUNK_SIZE;
-            const end = Math.min(file.size, start + CHUNK_SIZE);
+            // Chunk 0 nạp đơn lẻ để kiểm tra RX; khi RX online thì mở tối đa 2 luồng gối đầu song song
+            const maxConcurrency = (state.nextChunkToDispatch === 0 && completedCount === 0) ? 1 : 2;
+
+            while (state.activeWorkers < maxConcurrency && state.nextChunkToDispatch < state.totalChunks && !state.waitingRx && !state.cancelled) {
+                const idx = state.nextChunkToDispatch++;
+                state.activeWorkers++;
+                state.activeIndices.add(idx);
+                uploadSingleChunk(idx);
+            }
+            updateProgress();
+        };
+
+        function uploadSingleChunk(idx) {
+            if (state.cancelled) return;
+
+            const start = idx * state.chunkSize;
+            const end = Math.min(file.size, start + state.chunkSize);
             const chunkBlob = file.slice(start, end);
 
-            renderBatchGrid("txBatchContainer", state.totalChunks, idx, "uploading");
-
             const xhr = new XMLHttpRequest();
+            state.xhrMap.set(idx, xhr);
             currentUploadXhr = xhr;
 
             xhr.upload.onprogress = (e) => {
                 if (state.cancelled) return;
                 if (e.lengthComputable) {
-                    const currentTotalTransferred = start + e.loaded;
-                    const percent = Math.min(100, Math.round((currentTotalTransferred / file.size) * 100));
-                    const elapsedSec = (Date.now() - state.startTime) / 1000;
-                    let speedBytes = 0;
-                    if (elapsedSec > 0.2) speedBytes = currentTotalTransferred / elapsedSec;
-
-                    let etaStr = "--";
-                    if (speedBytes > 0 && currentTotalTransferred < file.size) {
-                        const remainingSec = Math.round((file.size - currentTotalTransferred) / speedBytes);
-                        if (remainingSec < 60) etaStr = `~${remainingSec}s`;
-                        else etaStr = `~${Math.floor(remainingSec / 60)}m ${remainingSec % 60}s`;
-                    } else if (percent === 100) {
-                        etaStr = "Xử lý...";
-                    }
-
-                    updateUploadProgressUI(percent, currentTotalTransferred, file.size, speedBytes, etaStr, idx + 1, state.totalChunks);
+                    state.chunkTransferred[idx] = Math.min(chunkBlob.size, e.loaded);
+                    updateProgress();
                 }
             };
 
             xhr.onload = () => {
-                currentUploadXhr = null;
+                state.xhrMap.delete(idx);
                 if (state.cancelled) return;
 
                 if (xhr.status === 200) {
-                    state.retryCount = 0;
+                    state.activeWorkers--;
+                    state.activeIndices.delete(idx);
+                    state.chunkTransferred[idx] = chunkBlob.size;
+                    state.chunkCompleted[idx] = true;
+                    state.retryCounts[idx] = 0;
+
                     let resData = {};
                     try { resData = JSON.parse(xhr.responseText); } catch (_) {}
 
-                    if (resData.status === "waiting_rx") {
+                    if (idx === 0 && resData.status === "waiting_rx") {
                         state.waitingRx = true;
-                        state.currentChunk = 1;
                         $("uploadEta").textContent = "Chờ RX...";
                         $("syncIndicator").textContent = "[⏸ CHỜ RX]";
                         showToast("[CHUNK 0 SẴN SÀNG • CHỜ RX KẾT NỐI]");
@@ -554,31 +603,31 @@
                         return;
                     }
 
-                    state.currentChunk++;
-                    state.uploadNext();
+                    state.dispatch();
                 } else if (xhr.status === 409) {
+                    state.cancelled = true;
+                    state.xhrMap.forEach(x => { try { x.abort(); } catch (_) {} });
                     hideUploadProgress();
                     $("syncIndicator").textContent = "[BỊ KHÓA]";
                     showLockout("TX đang bị chiếm giữ.");
                 } else if (xhr.status === 410) {
+                    state.cancelled = true;
+                    state.xhrMap.forEach(x => { try { x.abort(); } catch (_) {} });
                     hideUploadProgress();
                     $("syncIndicator").textContent = "[RX ĐÃ NGẮT]";
                     showToast("[BÊN NHẬN ĐÃ NGẮT KẾT NỐI]");
                 } else {
-                    handleChunkError();
+                    handleWorkerError(idx);
                 }
             };
 
             xhr.onerror = () => {
-                currentUploadXhr = null;
-                if (!state.cancelled) handleChunkError();
+                state.xhrMap.delete(idx);
+                if (!state.cancelled) handleWorkerError(idx);
             };
 
             xhr.onabort = () => {
-                currentUploadXhr = null;
-                hideUploadProgress();
-                $("syncIndicator").textContent = "[ĐÃ HỦY]";
-                showToast("[ĐÃ HỦY TẢI LÊN]");
+                state.xhrMap.delete(idx);
             };
 
             xhr.open("POST", `/${slug}-s/chunk?conn=${cid}`);
@@ -588,26 +637,36 @@
             xhr.setRequestHeader("X-Chunk-Index", idx.toString());
             xhr.setRequestHeader("X-Total-Chunks", state.totalChunks.toString());
             xhr.setRequestHeader("X-Chunk-Size", chunkBlob.size.toString());
+            xhr.setRequestHeader("X-Byte-Offset", start.toString());
             xhr.send(chunkBlob);
-        };
+        }
 
-        function handleChunkError() {
+        function handleWorkerError(idx) {
             if (state.cancelled) return;
-            if (state.retryCount < 3) {
-                state.retryCount++;
-                const delay = Math.pow(2, state.retryCount - 1) * 1000;
-                $("uploadEta").textContent = `Thử lại sau ${delay / 1000}s...`;
+            state.activeWorkers--;
+            state.activeIndices.delete(idx);
+
+            if (state.retryCounts[idx] < 3) {
+                state.retryCounts[idx]++;
+                const delay = Math.pow(2, state.retryCounts[idx] - 1) * 1000;
+                $("uploadEta").textContent = `Mảnh ${idx + 1} thử lại sau ${delay / 1000}s...`;
                 setTimeout(() => {
-                    if (!state.cancelled) state.uploadNext();
+                    if (!state.cancelled) {
+                        state.activeWorkers++;
+                        state.activeIndices.add(idx);
+                        uploadSingleChunk(idx);
+                    }
                 }, delay);
             } else {
+                state.cancelled = true;
+                state.xhrMap.forEach(x => { try { x.abort(); } catch (_) {} });
                 hideUploadProgress();
                 $("syncIndicator").textContent = "[LỖI MẠNG]";
-                showToast("[LỖI NẠP CHUNK - ĐÃ THỬ LẠI 3 LẦN]");
+                showToast(`[LỖI NẠP MẢNH ${idx + 1} - ĐÃ THỬ LẠI 3 LẦN]`);
             }
         }
 
-        state.uploadNext();
+        state.dispatch();
     }
 
     function updateHomeQuickLinks(s) {
@@ -696,6 +755,9 @@
         }
         if (chunkUploadState) {
             chunkUploadState.cancelled = true;
+            if (chunkUploadState.xhrMap) {
+                chunkUploadState.xhrMap.forEach(x => { try { x.abort(); } catch (_) {} });
+            }
             chunkUploadState = null;
         }
         fetch(`/${slug}-s/abort?conn=${getConnId()}`, { method: "POST" }).catch(() => {});
@@ -716,6 +778,9 @@
         }
         if (chunkUploadState) {
             chunkUploadState.cancelled = true;
+            if (chunkUploadState.xhrMap) {
+                chunkUploadState.xhrMap.forEach(x => { try { x.abort(); } catch (_) {} });
+            }
             chunkUploadState = null;
         }
         fetch(`/${slug}-s/abort?conn=${getConnId()}`, { method: "POST" }).catch(() => {});
@@ -749,7 +814,8 @@
         const fileInfo = recvCurrentFile || { name: $("recvFileName").textContent, size: 0, totalChunks: 1 };
         const fileName = fileInfo.name && fileInfo.name !== "-" ? fileInfo.name : "download.bin";
         const totalSize = fileInfo.size || 0;
-        const totalChunks = fileInfo.totalChunks || Math.max(1, Math.ceil(totalSize / CHUNK_SIZE));
+        let chunkSize = fileInfo.chunkSize || getOptimalChunkSize(totalSize);
+        let totalChunks = fileInfo.totalChunks || Math.max(1, Math.ceil(totalSize / chunkSize));
 
         let fileHandle = null;
         let writable = null;
@@ -787,6 +853,11 @@
             const resp = await fetch(`/${slug}-r?conn=${getConnId()}`, { signal: abortController.signal });
             if (!resp.ok) throw new Error("HTTP error " + resp.status);
 
+            const hdrChunks = parseInt(resp.headers.get("X-Total-Chunks"));
+            if (hdrChunks > 0) totalChunks = hdrChunks;
+            const hdrChunkSize = parseInt(resp.headers.get("X-Chunk-Size"));
+            if (hdrChunkSize > 0) chunkSize = hdrChunkSize;
+
             const reader = resp.body.getReader();
 
             while (true) {
@@ -801,7 +872,7 @@
 
                 receivedBytes += value.length;
                 const percent = totalSize > 0 ? Math.min(100, Math.round((receivedBytes / totalSize) * 100)) : 100;
-                const currentBatch = Math.min(totalChunks, Math.floor(receivedBytes / CHUNK_SIZE) + 1);
+                const currentBatch = Math.min(totalChunks, Math.floor(receivedBytes / chunkSize) + 1);
                 const elapsedSec = (Date.now() - startTime) / 1000;
                 let speedBytes = elapsedSec > 0.2 ? (receivedBytes / elapsedSec) : 0;
                 let etaStr = "--";

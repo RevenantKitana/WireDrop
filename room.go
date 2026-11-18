@@ -20,31 +20,91 @@ const (
 )
 
 const (
-	ChunkSize       = 16 * 1024 * 1024 // 16MB chuẩn nhị phân
+	ChunkSize       = 16 * 1024 * 1024 // 16MB mặc định
+	SubChunkSize    = 256 * 1024       // 256KB mỗi vi khung truyền xuyên thấu
+	MaxChunkSize    = 32 * 1024 * 1024 // 32MB tối đa
 	ChunkIdleHold   = 10 * time.Minute // Thời gian giữ Chunk 0 tối đa nếu RX chưa kết nối
 	ChunkStallLimit = 45 * time.Second // Thời gian chờ tối đa khi truyền 1 chunk
 )
 
-// ChunkItem đại diện cho 1 mảnh 16MB đang nằm trong bộ đệm RAM
-type ChunkItem struct {
-	Index    int
-	Data     []byte
-	Size     int
-	Checksum string
+var subChunkPool = sync.Pool{
+	New: func() any {
+		b := make([]byte, SubChunkSize)
+		return &b
+	},
 }
 
-// ChunkSession quản lý luân chuyển các chunk 16MB theo cơ chế Ping-Pong Buffer (Dung lượng đệm = 2 slots)
+// SubChunkFrame đại diện cho 1 vi khung 256KB truyền xuyên thấu trực tiếp sang RX
+type SubChunkFrame struct {
+	Data   []byte
+	BufPtr *[]byte
+	EOF    bool
+	Offset int64
+}
+
+// ChunkStreamPipe là đường ống truyền các vi khung cho một chunk cụ thể
+type ChunkStreamPipe struct {
+	Index  int
+	frames chan *SubChunkFrame
+}
+
+func NewChunkStreamPipe(index int, bufferFrames int) *ChunkStreamPipe {
+	if bufferFrames < 32 {
+		bufferFrames = 32
+	}
+	return &ChunkStreamPipe{
+		Index:  index,
+		frames: make(chan *SubChunkFrame, bufferFrames),
+	}
+}
+
+func (p *ChunkStreamPipe) WriteFrame(frame *SubChunkFrame, doneChan chan struct{}, timeout time.Duration) bool {
+	select {
+	case p.frames <- frame:
+		return true
+	case <-doneChan:
+		return false
+	case <-time.After(timeout):
+		return false
+	}
+}
+
+func (p *ChunkStreamPipe) ReadFrame(doneChan chan struct{}, timeout time.Duration) (*SubChunkFrame, bool) {
+	select {
+	case frame, ok := <-p.frames:
+		if !ok {
+			return nil, false
+		}
+		return frame, true
+	case <-doneChan:
+		return nil, false
+	case <-time.After(timeout):
+		return nil, false
+	}
+}
+
+// ChunkSession quản lý luân chuyển các chunk và vi khung 256KB theo cơ chế Turbo HTTP Pipelining
 type ChunkSession struct {
-	sync.Mutex
+	sync.RWMutex
 	SessionID   string
 	FileName    string
 	TotalSize   int64
 	TotalChunks int
+	ChunkSize   int
 	CreatedAt   time.Time
 	LastActive  time.Time
 
-	// Buffer channel chứa tối đa 2 chunks (32MB RAM cap)
-	chunkChan chan *ChunkItem
+	// Chỉ số chunk mà RX đang đọc (bắt đầu từ 0)
+	currentRxChunk int
+
+	// Tổng số byte đã thực sự xả thành công xuống socket RX (để chống lặp byte khi retry giữa chừng)
+	FlushedTotalBytes int64
+
+	// Bảng quản lý pipe cho từng chunk
+	pipes map[int]*ChunkStreamPipe
+
+	// Kênh thông báo khi RX chuyển sang chunk tiếp theo
+	advanceChan chan struct{}
 
 	// Kênh đồng bộ và ngắt
 	doneChan  chan struct{}
@@ -55,60 +115,95 @@ type ChunkSession struct {
 	idleTimer *time.Timer
 }
 
-func NewChunkSession(sessionID, fileName string, totalSize int64, totalChunks int) *ChunkSession {
+func NewChunkSession(sessionID, fileName string, totalSize int64, totalChunks int, chunkSize int) *ChunkSession {
+	if chunkSize <= 0 {
+		chunkSize = ChunkSize
+	}
 	return &ChunkSession{
 		SessionID:   sessionID,
 		FileName:    fileName,
 		TotalSize:   totalSize,
 		TotalChunks: totalChunks,
+		ChunkSize:   chunkSize,
 		CreatedAt:   time.Now(),
 		LastActive:  time.Now(),
-		chunkChan:   make(chan *ChunkItem, 2), // Ping-Pong Buffer (Window = 2)
+		pipes:       make(map[int]*ChunkStreamPipe),
+		advanceChan: make(chan struct{}),
 		doneChan:    make(chan struct{}),
 	}
 }
 
-// PushChunk đẩy một chunk vào buffer (chờ tối đa timeout nếu buffer 2 slots đang đầy)
-func (s *ChunkSession) PushChunk(item *ChunkItem, timeout time.Duration) (bool, string) {
+// GetOrCreatePipe lấy hoặc khởi tạo pipe cho chunkIndex
+func (s *ChunkSession) GetOrCreatePipe(index int) *ChunkStreamPipe {
 	s.Lock()
-	if s.cancelled {
-		msg := s.cancelMsg
-		s.Unlock()
-		return false, msg
-	}
-	s.LastActive = time.Now()
-	s.Unlock()
+	defer s.Unlock()
 
-	select {
-	case s.chunkChan <- item:
-		return true, ""
-	case <-s.doneChan:
-		s.Lock()
-		defer s.Unlock()
-		return false, s.cancelMsg
-	case <-time.After(timeout):
-		return false, "Push chunk timeout (45s stall)"
+	pipe, exists := s.pipes[index]
+	if !exists {
+		// Dung lượng đệm khung: đủ cho toàn bộ chunk (tối đa 128 khung = 32MB)
+		framesCount := s.ChunkSize / SubChunkSize
+		if framesCount < 32 {
+			framesCount = 32
+		}
+		if framesCount > 128 {
+			framesCount = 128
+		}
+		pipe = NewChunkStreamPipe(index, framesCount)
+		s.pipes[index] = pipe
+	}
+	return pipe
+}
+
+// WaitForUploadSlot kiểm tra và chờ quyền nạp chunk (tối đa 2 chunk chạy song song gối đầu: chunkIndex <= currentRxChunk + 1)
+func (s *ChunkSession) WaitForUploadSlot(chunkIndex int, timeout time.Duration) bool {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	for {
+		s.RLock()
+		if s.cancelled {
+			s.RUnlock()
+			return false
+		}
+		if chunkIndex <= s.currentRxChunk+1 {
+			s.RUnlock()
+			return true
+		}
+		ch := s.advanceChan
+		done := s.doneChan
+		s.RUnlock()
+
+		select {
+		case <-ch:
+			// RX đã chuyển chunk, kiểm tra lại điều kiện
+		case <-done:
+			return false
+		case <-timer.C:
+			return false
+		}
 	}
 }
 
-// PopChunk lấy một chunk từ buffer xả sang RX (chờ tối đa timeout)
-func (s *ChunkSession) PopChunk(timeout time.Duration) (*ChunkItem, bool, string) {
-	select {
-	case item, ok := <-s.chunkChan:
-		if !ok {
-			return nil, false, "Session closed"
-		}
-		s.Lock()
-		s.LastActive = time.Now()
-		s.Unlock()
-		return item, true, ""
-	case <-s.doneChan:
-		s.Lock()
-		defer s.Unlock()
-		return nil, false, s.cancelMsg
-	case <-time.After(timeout):
-		return nil, false, "Pop chunk timeout (45s stall)"
+// AdvanceRxChunk thông báo chunkIndex đã được xả xong sang RX
+func (s *ChunkSession) AdvanceRxChunk(index int) {
+	s.Lock()
+	if index >= s.currentRxChunk {
+		s.currentRxChunk = index + 1
 	}
+	if pipe, exists := s.pipes[index]; exists {
+		delete(s.pipes, index)
+		close(pipe.frames)
+	}
+	oldAdv := s.advanceChan
+	s.advanceChan = make(chan struct{})
+	s.Unlock()
+
+	close(oldAdv)
+}
+
+// GetChunkStartOffset trả về vị trí byte bắt đầu của chunk trong file
+func (s *ChunkSession) GetChunkStartOffset(index int) int64 {
+	return int64(index) * int64(s.ChunkSize)
 }
 
 // Cancel hủy phiên truyền file do một trong hai bên ngắt hoặc quá hạn
@@ -124,6 +219,17 @@ func (s *ChunkSession) Cancel(reason string) {
 		s.idleTimer.Stop()
 	}
 	close(s.doneChan)
+
+	// Dọn dẹp và thu hồi các buffer đang nằm trong các pipe về subChunkPool
+	for idx, pipe := range s.pipes {
+		close(pipe.frames)
+		for frame := range pipe.frames {
+			if frame.BufPtr != nil {
+				subChunkPool.Put(frame.BufPtr)
+			}
+		}
+		delete(s.pipes, idx)
+	}
 	s.Unlock()
 }
 
@@ -347,8 +453,8 @@ func (r *RoomState) SetFile(name string, size int64, data []byte, tempPath strin
 	r.Touch()
 }
 
-// StartChunkSession khởi tạo phiên truyền file cắt mảnh 16MB mới
-func (r *RoomState) StartChunkSession(sessionID, fileName string, totalSize int64, totalChunks int) *ChunkSession {
+// StartChunkSession khởi tạo phiên truyền file cắt mảnh Turbo HTTP mới
+func (r *RoomState) StartChunkSession(sessionID, fileName string, totalSize int64, totalChunks int, chunkSize int) *ChunkSession {
 	r.Lock()
 	defer r.Unlock()
 
@@ -361,7 +467,7 @@ func (r *RoomState) StartChunkSession(sessionID, fileName string, totalSize int6
 		_ = os.Remove(r.Slot.TempPath)
 	}
 
-	sess := NewChunkSession(sessionID, fileName, totalSize, totalChunks)
+	sess := NewChunkSession(sessionID, fileName, totalSize, totalChunks, chunkSize)
 	r.ChunkSess = sess
 	r.Slot = PipeSlot{
 		Type:      PayloadChunkStream,

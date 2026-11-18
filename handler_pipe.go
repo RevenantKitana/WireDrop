@@ -331,7 +331,7 @@ func handleReceiver(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case PayloadChunkStream:
-		// Phục vụ file cắt mảnh 16MB stream liên tục sang RX
+		// Phục vụ file cắt mảnh Turbo HTTP stream vi khung 256KB liên tục sang RX
 		sess := room.GetChunkSession()
 		if sess == nil {
 			http.Error(w, "Chunk session expired", http.StatusGone)
@@ -353,28 +353,49 @@ func handleReceiver(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("X-File-Size", fmt.Sprintf("%d", sess.TotalSize))
 		}
 		w.Header().Set("X-Total-Chunks", fmt.Sprintf("%d", sess.TotalChunks))
+		w.Header().Set("X-Chunk-Size", fmt.Sprintf("%d", sess.ChunkSize))
 		w.Header().Set("X-Accel-Buffering", "no")
 
 		flusher, ok := w.(http.Flusher)
 		for i := 0; i < sess.TotalChunks; i++ {
-			chunk, okChunk, errStr := sess.PopChunk(ChunkStallLimit)
-			if !okChunk {
-				sess.Cancel(errStr)
-				return
+			pipe := sess.GetOrCreatePipe(i)
+
+			for {
+				frame, okFrame := pipe.ReadFrame(sess.doneChan, ChunkStallLimit)
+				if !okFrame {
+					sess.Cancel("Pop subchunk timeout or aborted")
+					return
+				}
+
+				if len(frame.Data) > 0 {
+					_, writeErr := w.Write(frame.Data)
+					sess.Lock()
+					sess.FlushedTotalBytes += int64(len(frame.Data))
+					sess.Unlock()
+
+					if ok && sess.TotalChunks > 1 {
+						flusher.Flush()
+					}
+					if frame.BufPtr != nil {
+						subChunkPool.Put(frame.BufPtr)
+					}
+					if writeErr != nil {
+						sess.Cancel("RX connection terminated")
+						return
+					}
+				}
+
+				if frame.EOF {
+					break
+				}
 			}
 
-			_, writeErr := w.Write(chunk.Data)
-			if ok && sess.TotalChunks > 1 {
-				flusher.Flush()
-			}
-			if writeErr != nil {
-				sess.Cancel("RX connection terminated")
-				return
-			}
+			// Hoàn tất chunk i, giải phóng và thông báo cho upload slot kế tiếp
+			sess.AdvanceRxChunk(i)
 
 			ackData, _ := json.Marshal(map[string]interface{}{
 				"type":  "chunk_ack",
-				"index": chunk.Index,
+				"index": i,
 				"total": sess.TotalChunks,
 			})
 			room.BroadcastSSE("chunk_ack", string(ackData))
@@ -492,8 +513,10 @@ func handleRoomEvents(w http.ResponseWriter, r *http.Request) {
 			slotType = PayloadFile
 		}
 		totalChunks := 0
+		chunkSize := 0
 		if room.ChunkSess != nil {
 			totalChunks = room.ChunkSess.TotalChunks
+			chunkSize = room.ChunkSess.ChunkSize
 		}
 		respData := map[string]interface{}{
 			"status":          "ok",
@@ -508,6 +531,7 @@ func handleRoomEvents(w http.ResponseWriter, r *http.Request) {
 			"slot_file_size":  room.Slot.FileSize,
 			"chunked":         isChunked,
 			"total_chunks":    totalChunks,
+			"chunk_size":      chunkSize,
 		}
 		room.RUnlock()
 		_ = json.NewEncoder(w).Encode(respData)
@@ -565,8 +589,10 @@ func handleRoomEvents(w http.ResponseWriter, r *http.Request) {
 		initSlotType = PayloadFile
 	}
 	initTotalChunks := 0
+	initChunkSize := 0
 	if room.ChunkSess != nil {
 		initTotalChunks = room.ChunkSess.TotalChunks
+		initChunkSize = room.ChunkSess.ChunkSize
 	}
 	initData, _ := json.Marshal(map[string]interface{}{
 		"slug":            room.Slug,
@@ -580,6 +606,7 @@ func handleRoomEvents(w http.ResponseWriter, r *http.Request) {
 		"slot_file_size":  room.Slot.FileSize,
 		"chunked":         initChunked,
 		"total_chunks":    initTotalChunks,
+		"chunk_size":      initChunkSize,
 	})
 	room.RUnlock()
 
@@ -620,7 +647,7 @@ func handleResetReceiver(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "Receiver unpaired"})
 }
 
-// handleChunkUpload tiếp nhận từng khối 16MB từ Bên Gửi (TX)
+// handleChunkUpload tiếp nhận từng khối từ Bên Gửi (TX) theo cơ chế Turbo HTTP Pipelining
 func handleChunkUpload(w http.ResponseWriter, r *http.Request) {
 	slug := strings.ToLower(r.PathValue("room"))
 	slug = strings.TrimSuffix(slug, "-s")
@@ -654,29 +681,24 @@ func handleChunkUpload(w http.ResponseWriter, r *http.Request) {
 	if totalChunks <= 0 {
 		totalChunks = 1
 	}
-
-	// Đọc chunk body (tối đa 16MB + 4KB buffer)
-	r.Body = http.MaxBytesReader(w, r.Body, int64(ChunkSize+4096))
-	data, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "Chunk read error", http.StatusBadRequest)
-		return
+	chunkSize, _ := strconv.Atoi(r.Header.Get("X-Chunk-Size"))
+	if chunkSize <= 0 {
+		chunkSize = ChunkSize
 	}
 
 	var sess *ChunkSession
 	if chunkIndex == 0 {
-		sess = room.StartChunkSession(sessionID, fileName, totalSize, totalChunks)
-		// Báo cho Web UI biết có file lớn dạng Chunked
+		sess = room.StartChunkSession(sessionID, fileName, totalSize, totalChunks, chunkSize)
 		fileEvt, _ := json.Marshal(map[string]interface{}{
 			"type":         "file",
 			"name":         fileName,
 			"size":         totalSize,
 			"chunked":      true,
 			"total_chunks": totalChunks,
+			"chunk_size":   chunkSize,
 		})
 		room.BroadcastSSE("payload_updated", string(fileEvt))
 
-		// Cài đặt Timer 10 phút hủy slot nếu RX không cắm dây
 		room.RLock()
 		rxConnected := (room.ReceiverConn != nil)
 		room.RUnlock()
@@ -697,18 +719,93 @@ func handleChunkUpload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Đẩy chunk vào Buffer (chặn nếu buffer 2 slots đầy cho đến khi RX tiêu thụ)
-	ok, pushErr := sess.PushChunk(&ChunkItem{
-		Index:    chunkIndex,
-		Data:     data,
-		Size:     len(data),
-		Checksum: r.Header.Get("X-Chunk-Checksum"),
-	}, ChunkStallLimit)
-
-	if !ok {
-		http.Error(w, pushErr, http.StatusGone)
+	// Kiểm tra và chờ slot nạp (Pipelining: tối đa 2 chunk chạy gối đầu)
+	if !sess.WaitForUploadSlot(chunkIndex, ChunkStallLimit) {
+		http.Error(w, "Upload slot timeout or aborted", http.StatusGone)
 		return
 	}
+
+	pipe := sess.GetOrCreatePipe(chunkIndex)
+	chunkStartOffset := sess.GetChunkStartOffset(chunkIndex)
+	if offsetHdr := r.Header.Get("X-Byte-Offset"); offsetHdr != "" {
+		if o, err := strconv.ParseInt(offsetHdr, 10, 64); err == nil {
+			chunkStartOffset = o
+		}
+	}
+
+	// Đọc r.Body theo từng SubChunk 256KB
+	r.Body = http.MaxBytesReader(w, r.Body, int64(MaxChunkSize+65536))
+	currentLocalOffset := int64(0)
+
+	expectedChunkSize := int64(chunkSize)
+	if totalSize > 0 && int64(chunkIndex+1)*int64(chunkSize) > totalSize {
+		expectedChunkSize = totalSize - int64(chunkIndex)*int64(chunkSize)
+	}
+
+	for {
+		bufPtr := subChunkPool.Get().(*[]byte)
+		n, err := io.ReadFull(r.Body, *bufPtr)
+		if n > 0 {
+			subStart := chunkStartOffset + currentLocalOffset
+			subEnd := subStart + int64(n)
+			currentLocalOffset += int64(n)
+
+			sess.RLock()
+			flushedBytes := sess.FlushedTotalBytes
+			sess.RUnlock()
+
+			if subEnd <= flushedBytes {
+				// Đã xả xong ở lượt trước (retry mid-chunk) -> Bỏ qua
+				subChunkPool.Put(bufPtr)
+			} else if subStart < flushedBytes {
+				// Trùng 1 phần -> Cắt phần đã gửi
+				skip := flushedBytes - subStart
+				trimmed := (*bufPtr)[skip:n]
+				ok := pipe.WriteFrame(&SubChunkFrame{
+					Data:   trimmed,
+					BufPtr: bufPtr,
+					Offset: flushedBytes,
+				}, sess.doneChan, ChunkStallLimit)
+				if !ok {
+					subChunkPool.Put(bufPtr)
+					http.Error(w, "Pipe write frame failed", http.StatusGone)
+					return
+				}
+			} else {
+				// Vi khung mới hoàn toàn -> Ghi vào pipe
+				ok := pipe.WriteFrame(&SubChunkFrame{
+					Data:   (*bufPtr)[:n],
+					BufPtr: bufPtr,
+					Offset: subStart,
+				}, sess.doneChan, ChunkStallLimit)
+				if !ok {
+					subChunkPool.Put(bufPtr)
+					http.Error(w, "Pipe write frame failed", http.StatusGone)
+					return
+				}
+			}
+
+			if currentLocalOffset >= expectedChunkSize {
+				// Đã nạp đủ dung lượng của chunk này!
+				break
+			}
+		}
+
+		if err != nil {
+			if n == 0 {
+				subChunkPool.Put(bufPtr)
+			}
+			if err == io.EOF && (totalSize <= 0 || currentLocalOffset >= expectedChunkSize) {
+				break
+			}
+			// Bị ngắt kết nối hoặc đứt giữa chừng -> Không gửi EOF vào pipe, để RX tiếp tục chờ retry
+			http.Error(w, fmt.Sprintf("Chunk incomplete: got %d/%d bytes: %v", currentLocalOffset, expectedChunkSize, err), http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Báo cho pipe biết chunk này đã nạp trọn vẹn
+	pipe.WriteFrame(&SubChunkFrame{EOF: true}, sess.doneChan, ChunkStallLimit)
 
 	room.RLock()
 	rxOnline := (room.ReceiverConn != nil)

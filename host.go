@@ -22,11 +22,12 @@ type EnvConfig struct {
 	Port            string
 	CloudflareToken string
 	CustomDomain    string
+	TunnelProtocol  string
 }
 
 // loadEnvFile tìm và đọc file .env
 func loadEnvFile(dir string) EnvConfig {
-	cfg := EnvConfig{Port: "8080"}
+	cfg := EnvConfig{Port: "8080", TunnelProtocol: "http2"}
 
 	// Tìm .env ở thư mục exe hoặc thư mục làm việc hiện tại
 	envPaths := []string{
@@ -57,6 +58,10 @@ func loadEnvFile(dir string) EnvConfig {
 						cfg.CloudflareToken = val
 					case "CUSTOM_DOMAIN":
 						cfg.CustomDomain = val
+					case "TUNNEL_PROTOCOL":
+						if val != "" {
+							cfg.TunnelProtocol = strings.ToLower(val)
+						}
 					}
 				}
 			}
@@ -69,8 +74,12 @@ func loadEnvFile(dir string) EnvConfig {
 // saveEnvFile lưu cấu hình vào .env
 func saveEnvFile(dir string, cfg EnvConfig) error {
 	p := filepath.Join(dir, ".env")
-	content := fmt.Sprintf("# WireDrop FastHosting Configuration\nPORT=%s\nCLOUDFLARE_TUNNEL_TOKEN=%s\nCUSTOM_DOMAIN=%s\n",
-		cfg.Port, cfg.CloudflareToken, cfg.CustomDomain)
+	proto := cfg.TunnelProtocol
+	if proto == "" {
+		proto = "http2"
+	}
+	content := fmt.Sprintf("# WireDrop FastHosting Configuration\nPORT=%s\nCLOUDFLARE_TUNNEL_TOKEN=%s\nCUSTOM_DOMAIN=%s\nTUNNEL_PROTOCOL=%s\n",
+		cfg.Port, cfg.CloudflareToken, cfg.CustomDomain, proto)
 	return os.WriteFile(p, []byte(content), 0644)
 }
 
@@ -381,12 +390,16 @@ func runTunnelFlow(exeDir string, cfg EnvConfig, isQuick bool) {
 	}
 
 	var cfCmd *exec.Cmd
+	proto := cfg.TunnelProtocol
+	if proto == "" {
+		proto = "http2"
+	}
 	if isQuick {
-		fmt.Println("[*] Dang mo duong ham Cloudflare Quick Tunnel (protocol: auto)...")
-		cfCmd = exec.Command(cfBin, "tunnel", "--no-autoupdate", "--url", "http://127.0.0.1:"+cfg.Port)
+		fmt.Printf("[*] Dang mo duong ham Cloudflare Quick Tunnel (protocol: %s)...\n", proto)
+		cfCmd = exec.Command(cfBin, "tunnel", "--no-autoupdate", "--protocol", proto, "--url", "http://127.0.0.1:"+cfg.Port)
 	} else {
-		fmt.Println("[*] Dang ket noi Cloudflare Named Tunnel theo Token (protocol: http2)...")
-		cfCmd = exec.Command(cfBin, "tunnel", "--no-autoupdate", "--protocol", "http2", "run", "--token", cfg.CloudflareToken)
+		fmt.Printf("[*] Dang ket noi Cloudflare Named Tunnel theo Token (protocol: %s)...\n", proto)
+		cfCmd = exec.Command(cfBin, "tunnel", "--no-autoupdate", "--protocol", proto, "run", "--token", cfg.CloudflareToken)
 	}
 
 	// Đọc cả stdout và stderr của cloudflared qua io.Pipe để lấy URL (bất kể phiên bản cloudflared ghi vào kênh nào)

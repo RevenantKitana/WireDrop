@@ -1,9 +1,11 @@
-# SPEC-PREPARE: KẾ HOẠCH TĂNG TỐC TRUYỀN FILE THẾ HỆ MỚI (TURBO TRANSFER ENGINE)
-# HỆ THỐNG: WireDrop (Dự kiến v0.7.0 – v0.8.0)
+# ĐẶC TẢ KIẾN TRÚC: ĐỘNG CƠ TĂNG TỐC TRUYỀN FILE TURBO HTTP CORE
+# (TURBO TRANSFER ENGINE SPECIFICATION - PHASE 1)
+# HỆ THỐNG: WireDrop v0.7.0+
 
-**Loại tài liệu:** `SPEC-PREPARE` (Tài liệu Chuẩn bị Đặc tả & Phân tích Kiến trúc trước khi khóa Spec)  
-**Ngày khởi tạo:** 2026-11-18  
-**Phiên bản nền tảng hiện tại:** `v0.6.2` (16MB Chunked Ping-Pong Pipe)  
+**Loại tài liệu:** `APPROVED ARCHITECTURAL SPECIFICATION` (Đặc Tả Kiến Trúc Đã Được Phê Duyệt)  
+**Ngày phê duyệt:** 2026-11-18  
+**Quyết định phê duyệt:** Chấp thuận toàn bộ 5/5 khuyến nghị thiết kế (Q1: Pha 1 Turbo HTTP Core cho v0.7.0; Q2: Vi mảnh 256KB với `sync.Pool`; Q3: Tối đa 2 luồng nạp song song gối đầu; Q4: Bậc mảnh theo dung lượng 8MB/16MB/32MB; Q5: Mặc định `--protocol http2` cho FastHost Tunnel).  
+**Phiên bản áp dụng:** `v0.7.0`  
 **Ràng buộc bất biến:** **100% Go Standard Library (Zero-Dependency)** • **0 Byte Ghi Đĩa Server** • **Giữ nguyên tương thích CLI (`curl`, `irm`)**
 
 ---
