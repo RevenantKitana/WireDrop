@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -483,5 +484,109 @@ func TestChunkedAbortAndCleanup(t *testing.T) {
 	}
 	if checkData2["chunked"] == true {
 		t.Errorf("Kỳ vọng chunked == false sau abort, nhận true")
+	}
+}
+
+func TestSingleFileUploadAndDownload(t *testing.T) {
+	handler := createHandler()
+	ts := httptest.NewServer(handler)
+	defer ts.Close()
+
+	slug := "singlefiletest"
+	fileContent := []byte("The quick brown fox jumps over the lazy dog. 1234567890!")
+	fileName := "sample.txt"
+
+	// Tạo multipart form
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("file", fileName)
+	if err != nil {
+		t.Fatalf("Lỗi CreateFormFile: %v", err)
+	}
+	_, _ = part.Write(fileContent)
+	_ = writer.Close()
+
+	// 1. Upload file qua POST /singlefiletest-s
+	postReq, _ := http.NewRequest("POST", fmt.Sprintf("%s/%s-s?conn=single_tx", ts.URL, slug), body)
+	postReq.Header.Set("Content-Type", writer.FormDataContentType())
+	postResp, err := http.DefaultClient.Do(postReq)
+	if err != nil || postResp.StatusCode != http.StatusOK {
+		t.Fatalf("Lỗi upload: %v, status: %d", err, postResp.StatusCode)
+	}
+	postResp.Body.Close()
+
+	// 2. Download file qua GET /singlefiletest-r
+	getReq, _ := http.NewRequest("GET", fmt.Sprintf("%s/%s-r?conn=single_rx", ts.URL, slug), nil)
+	getResp, err := http.DefaultClient.Do(getReq)
+	if err != nil || getResp.StatusCode != http.StatusOK {
+		t.Fatalf("Lỗi download: %v, status: %d", err, getResp.StatusCode)
+	}
+	defer getResp.Body.Close()
+
+	downloaded, err := io.ReadAll(getResp.Body)
+	if err != nil {
+		t.Fatalf("Lỗi read body: %v", err)
+	}
+
+	t.Logf("Downloaded len: %d, Content-Length header: %s, Disposition: %s",
+		len(downloaded), getResp.Header.Get("Content-Length"), getResp.Header.Get("Content-Disposition"))
+
+	if !bytes.Equal(downloaded, fileContent) {
+		t.Errorf("Dữ liệu tải về không khớp! Kỳ vọng %d bytes, nhận %d bytes", len(fileContent), len(downloaded))
+	}
+}
+
+func TestOneBatchChunkedDownload(t *testing.T) {
+	handler := createHandler()
+	ts := httptest.NewServer(handler)
+	defer ts.Close()
+
+	slug := "onebatch"
+	sessionID := "sess_one_batch"
+	fileName := "onebatch.bin"
+	chunkSize := 102400 // 100KB
+	totalChunks := 1
+	totalSize := int64(chunkSize)
+	chunk0Data := bytes.Repeat([]byte("Z"), chunkSize)
+
+	// 1. Upload chunk 0 (totalChunks = 1)
+	req0, _ := http.NewRequest("POST", fmt.Sprintf("%s/%s-s/chunk?conn=tx_1", ts.URL, slug), bytes.NewReader(chunk0Data))
+	req0.Header.Set("X-Session-ID", sessionID)
+	req0.Header.Set("X-File-Name", fileName)
+	req0.Header.Set("X-File-Size", fmt.Sprintf("%d", totalSize))
+	req0.Header.Set("X-Chunk-Index", "0")
+	req0.Header.Set("X-Total-Chunks", fmt.Sprintf("%d", totalChunks))
+	req0.Header.Set("X-Chunk-Size", fmt.Sprintf("%d", chunkSize))
+
+	resp0, err := http.DefaultClient.Do(req0)
+	if err != nil || resp0.StatusCode != http.StatusOK {
+		t.Fatalf("Lỗi upload chunk 0: %v, status: %d", err, resp0.StatusCode)
+	}
+	var resMap0 map[string]interface{}
+	_ = json.NewDecoder(resp0.Body).Decode(&resMap0)
+	resp0.Body.Close()
+	t.Logf("Upload resp: %v", resMap0)
+
+	// 2. Download qua GET /onebatch-r?conn=rx_1
+	rxReq, _ := http.NewRequest("GET", fmt.Sprintf("%s/%s-r?conn=rx_1", ts.URL, slug), nil)
+	rxResp, err := http.DefaultClient.Do(rxReq)
+	if err != nil || rxResp.StatusCode != http.StatusOK {
+		t.Fatalf("Lỗi download: %v, status: %d", err, rxResp.StatusCode)
+	}
+	defer rxResp.Body.Close()
+
+	allData, err := io.ReadAll(rxResp.Body)
+	if err != nil {
+		t.Fatalf("Lỗi read body: %v", err)
+	}
+
+	t.Logf("Downloaded len: %d, Content-Length: %s, Disposition: %s",
+		len(allData), rxResp.Header.Get("Content-Length"), rxResp.Header.Get("Content-Disposition"))
+
+	if len(allData) != chunkSize {
+		t.Errorf("Kỳ vọng %d bytes, nhận %d bytes", chunkSize, len(allData))
+	}
+	if !bytes.Equal(allData, chunk0Data) {
+		t.Errorf("Dữ liệu không khớp!")
 	}
 }

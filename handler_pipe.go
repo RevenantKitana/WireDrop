@@ -272,15 +272,10 @@ func handleReceiver(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 4. Phục vụ vật phẩm đang nằm trong khe cắm duy nhất (Single Slot)
-	room.Lock()
+	room.RLock()
 	slot := room.Slot
 	shouldBurn := room.BurnAfterRead
-
-	// Nếu bật Burn-After-Read: rút cạn slot sau khi phục vụ (trừ trường hợp ChunkStream cần stream qua nhiều vòng)
-	if shouldBurn && slot.Type != PayloadChunkStream {
-		room.Slot = PipeSlot{Type: PayloadEmpty}
-	}
-	room.Unlock()
+	room.RUnlock()
 
 	switch slot.Type {
 	case PayloadText:
@@ -296,6 +291,7 @@ func handleReceiver(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(textToSend))
 
 		if shouldBurn {
+			room.ClearSlot()
 			room.BroadcastSSE("payload_cleared", "")
 		}
 
@@ -304,6 +300,8 @@ func handleReceiver(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/octet-stream")
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filepath.Base(slot.FileName)))
 		w.Header().Set("Content-Length", fmt.Sprintf("%d", slot.FileSize))
+		w.Header().Set("X-File-Size", fmt.Sprintf("%d", slot.FileSize))
+		w.Header().Set("X-Total-Chunks", "1")
 
 		if len(slot.FileData) > 0 {
 			_, _ = w.Write(slot.FileData)
@@ -319,6 +317,7 @@ func handleReceiver(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if shouldBurn {
+			room.ClearSlot()
 			room.BroadcastSSE("payload_cleared", "")
 		}
 
@@ -342,7 +341,9 @@ func handleReceiver(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filepath.Base(sess.FileName)))
 		if sess.TotalSize > 0 {
 			w.Header().Set("Content-Length", fmt.Sprintf("%d", sess.TotalSize))
+			w.Header().Set("X-File-Size", fmt.Sprintf("%d", sess.TotalSize))
 		}
+		w.Header().Set("X-Total-Chunks", fmt.Sprintf("%d", sess.TotalChunks))
 		w.Header().Set("X-Accel-Buffering", "no")
 
 		flusher, ok := w.(http.Flusher)
@@ -354,7 +355,7 @@ func handleReceiver(w http.ResponseWriter, r *http.Request) {
 			}
 
 			_, writeErr := w.Write(chunk.Data)
-			if ok {
+			if ok && sess.TotalChunks > 1 {
 				flusher.Flush()
 			}
 			if writeErr != nil {

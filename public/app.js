@@ -119,7 +119,7 @@
                             renderPayload(d);
                         } else {
                             if (d.slot_type === 2 && $("activeFileName").textContent !== d.slot_file_name) {
-                                showActiveFile(d.slot_file_name, d.slot_file_size);
+                                showActiveFile(d.slot_file_name, d.slot_file_size, d.total_chunks);
                             } else if (d.slot_type === 1 && !$("btnModeFile").classList.contains("active") && !typing) {
                                 if ($("senderTextarea").value !== (d.slot_text || "")) {
                                     $("senderTextarea").value = d.slot_text || "";
@@ -187,13 +187,13 @@
             const d = JSON.parse(e.data);
             if (isSender) {
                 if (d.type === "file") {
-                    showActiveFile(d.name, d.size);
+                    showActiveFile(d.name, d.size, d.total_chunks);
                 } else if (d.type === "text" && !typing) {
                     $("senderTextarea").value = d.content || "";
                 }
             }
             if (!isSender) {
-                d.type === "text" ? showRecvText(d.content) : showRecvFile(d.name, d.size);
+                d.type === "text" ? showRecvText(d.content) : showRecvFile(d.name, d.size, d.total_chunks);
             }
         });
         sse.addEventListener("payload_cleared", () => {
@@ -216,7 +216,7 @@
     function renderPayload(d) {
         if (isSender) {
             if (d.slot_type === 2) {
-                showActiveFile(d.slot_file_name, d.slot_file_size);
+                showActiveFile(d.slot_file_name, d.slot_file_size, d.total_chunks);
             } else if ($("btnModeFile").classList.contains("active") || location.search.includes("mode=file") || location.hash === "#file") {
                 showFileDropzone();
             } else {
@@ -224,7 +224,7 @@
                 showTextEditor();
             }
         } else {
-            if (d.slot_type === 2) showRecvFile(d.slot_file_name, d.slot_file_size);
+            if (d.slot_type === 2) showRecvFile(d.slot_file_name, d.slot_file_size, d.total_chunks);
             else if (d.slot_type === 1 && d.slot_text) showRecvText(d.slot_text);
             else showRecvEmpty();
         }
@@ -259,13 +259,20 @@
         updateCheatCode();
     }
 
-    function showActiveFile(name, size) {
+    function showActiveFile(name, size, totalChunks) {
         showFileDropzone();
         $("dropzoneBox").style.display = "none";
         $("fileUploadProgressCard").style.display = "none";
         $("fileActiveCard").style.display = "flex";
         $("activeFileName").textContent = name;
         $("activeFileSize").textContent = fmtSize(size);
+        const batchRow = $("activeFileBatchRow");
+        const batchInfo = $("activeFileBatchInfo");
+        if (batchRow && batchInfo) {
+            const tChunks = totalChunks || Math.max(1, Math.ceil((size || 0) / CHUNK_SIZE));
+            batchRow.style.display = "flex";
+            batchInfo.textContent = tChunks > 1 ? `${tChunks} Mảnh (16MB/mảnh) • Sẵn sàng` : `1 Mảnh duy nhất (${fmtSize(size)}) • Sẵn sàng`;
+        }
         updateCheatCode();
     }
 
@@ -276,21 +283,74 @@
         $("btnCopyRecvText").style.display = "inline-block";
     }
 
-    function showRecvFile(name, size) {
+    let recvCurrentFile = null;
+    let recvDownloadController = null;
+
+    function showRecvFile(name, size, totalChunks) {
+        const tChunks = totalChunks || Math.max(1, Math.ceil((size || 0) / CHUNK_SIZE));
+        recvCurrentFile = { name, size, totalChunks: tChunks };
+
         $("recvTextSection").style.display = "none";
         $("recvFileSection").style.display = "flex";
+        $("recvFileReadyCard").style.display = "flex";
+        $("recvFileProgressCard").style.display = "none";
+
         $("recvFileName").textContent = name;
         $("recvFileSize").textContent = fmtSize(size);
-        $("btnDownloadFile").href = `/${slug}-r?conn=${getConnId()}`;
-        $("btnDownloadFile").download = name;
+        const batchNote = $("recvFileBatchNote");
+        if (batchNote) {
+            batchNote.textContent = tChunks > 1 ? `Đa Mảnh: ${tChunks} mảnh × 16MB` : `Đơn Mảnh: 1 mảnh nguyên vẹn (${fmtSize(size)})`;
+        }
         $("btnCopyRecvText").style.display = "none";
     }
 
     function showRecvEmpty() {
+        recvCurrentFile = null;
         $("recvTextSection").style.display = "flex";
         $("recvFileSection").style.display = "none";
+        if ($("recvFileReadyCard")) $("recvFileReadyCard").style.display = "flex";
+        if ($("recvFileProgressCard")) $("recvFileProgressCard").style.display = "none";
         $("recvTextDisplay").querySelector("code").textContent = "# Chờ dữ liệu từ TX...";
         $("btnCopyRecvText").style.display = "inline-block";
+    }
+
+    function renderBatchGrid(containerId, totalChunks, activeIndex, mode) {
+        const container = $(containerId);
+        if (!container) return;
+        if (!totalChunks || totalChunks <= 0) {
+            container.style.display = "none";
+            container.innerHTML = "";
+            return;
+        }
+        container.style.display = "flex";
+        container.innerHTML = "";
+
+        const maxVisible = 32;
+        const count = Math.min(totalChunks, maxVisible);
+
+        for (let i = 0; i < count; i++) {
+            const chip = document.createElement("span");
+            chip.className = "batch-chip";
+            const num = i + 1;
+            if (i < activeIndex) {
+                chip.classList.add("done");
+                chip.textContent = `✓ Mảnh ${num}`;
+            } else if (i === activeIndex) {
+                chip.classList.add("active");
+                chip.textContent = mode === "uploading" ? `⟳ Nạp ${num}` : `⬇ Nhận ${num}`;
+            } else {
+                chip.classList.add("waiting");
+                chip.textContent = `Mảnh ${num}`;
+            }
+            container.appendChild(chip);
+        }
+
+        if (totalChunks > maxVisible) {
+            const extra = document.createElement("span");
+            extra.className = "batch-chip waiting";
+            extra.textContent = `+${totalChunks - maxVisible} mảnh khác...`;
+            container.appendChild(extra);
+        }
     }
 
     function fmtSize(b) {
@@ -332,6 +392,7 @@
 
     function hideUploadProgress() {
         $("fileUploadProgressCard").style.display = "none";
+        if ($("txBatchContainer")) $("txBatchContainer").style.display = "none";
         if ($("activeFileName").textContent && $("activeFileName").textContent !== "-") {
             $("fileActiveCard").style.display = "flex";
         } else {
@@ -360,89 +421,8 @@
 
     function uploadFile(file) {
         if (!file || !isSender || isHome) return;
-        if (file.size <= CHUNK_SIZE) {
-            uploadSingleFile(file);
-        } else {
-            uploadChunkedFile(file);
-        }
-    }
-
-    function uploadSingleFile(file) {
-        if (currentUploadXhr) {
-            currentUploadXhr.abort();
-            currentUploadXhr = null;
-        }
-
-        showUploadProgress(file.name, file.size);
-        $("syncIndicator").textContent = "[NẠP: 0%]";
-
-        const fd = new FormData();
-        fd.append("file", file);
-        const cid = getConnId();
-
-        const xhr = new XMLHttpRequest();
-        currentUploadXhr = xhr;
-        const startTime = Date.now();
-
-        xhr.upload.onprogress = (e) => {
-            if (e.lengthComputable) {
-                const percent = Math.min(100, Math.round((e.loaded / e.total) * 100));
-                const elapsedSec = (Date.now() - startTime) / 1000;
-                let speedBytes = 0;
-                if (elapsedSec > 0.2) speedBytes = e.loaded / elapsedSec;
-
-                let etaStr = "--";
-                if (speedBytes > 0 && e.loaded < e.total) {
-                    const remainingSec = Math.round((e.total - e.loaded) / speedBytes);
-                    if (remainingSec < 60) etaStr = `~${remainingSec}s`;
-                    else etaStr = `~${Math.floor(remainingSec / 60)}m ${remainingSec % 60}s`;
-                } else if (percent === 100) {
-                    etaStr = "Xử lý...";
-                }
-
-                updateUploadProgressUI(percent, e.loaded, e.total, speedBytes, etaStr, 1, 1);
-            }
-        };
-
-        xhr.onload = () => {
-            currentUploadXhr = null;
-            if (xhr.status === 200) {
-                try {
-                    const d = JSON.parse(xhr.responseText);
-                    showActiveFile(d.name, d.size);
-                    $("syncIndicator").textContent = "[ĐÃ NẠP ✓]";
-                    showToast(`[ĐÃ NẠP ${d.name}]`);
-                } catch (_) {
-                    showActiveFile(file.name, file.size);
-                    $("syncIndicator").textContent = "[ĐÃ NẠP ✓]";
-                }
-            } else if (xhr.status === 409) {
-                hideUploadProgress();
-                $("syncIndicator").textContent = "[BỊ KHÓA]";
-                showLockout("TX đang bị chiếm giữ. Bấm [THỬ KẾT NỐI LẠI] để cắm lại dây!");
-            } else {
-                hideUploadProgress();
-                $("syncIndicator").textContent = "[LỖI " + xhr.status + "]";
-                showToast("[LỖI NẠP FILE]");
-            }
-        };
-
-        xhr.onerror = () => {
-            currentUploadXhr = null;
-            hideUploadProgress();
-            $("syncIndicator").textContent = "[MẤT MẠNG]";
-            showToast("[LỖI KẾT NỐI MẠNG]");
-        };
-
-        xhr.onabort = () => {
-            currentUploadXhr = null;
-            hideUploadProgress();
-            $("syncIndicator").textContent = "[ĐÃ HỦY]";
-            showToast("[ĐÃ HỦY TẢI LÊN]");
-        };
-
-        xhr.open("POST", `/${slug}-s?conn=${cid}`);
-        xhr.send(fd);
+        // Tất cả file (từ 1 batch <16MB đến nhiều batch >16MB) đều đi qua pipeline cắt mảnh đồng bộ
+        uploadChunkedFile(file);
     }
 
     function uploadChunkedFile(file) {
@@ -455,12 +435,13 @@
             chunkUploadState = null;
         }
 
-        const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+        const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
         const sessionId = "sess_" + slug + "_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 7);
         const cid = getConnId();
 
         showUploadProgress(file.name, file.size);
         $("syncIndicator").textContent = "[NẠP: 0%]";
+        renderBatchGrid("txBatchContainer", totalChunks, 0, "uploading");
 
         const state = {
             file,
@@ -479,9 +460,10 @@
         state.uploadNext = function () {
             if (state.cancelled) return;
             if (state.currentChunk >= state.totalChunks) {
-                showActiveFile(file.name, file.size);
+                showActiveFile(file.name, file.size, state.totalChunks);
                 $("syncIndicator").textContent = "[ĐÃ NẠP ✓]";
                 showToast(`[ĐÃ NẠP ${file.name}]`);
+                renderBatchGrid("txBatchContainer", state.totalChunks, state.totalChunks, "uploading");
                 chunkUploadState = null;
                 return;
             }
@@ -490,6 +472,8 @@
             const start = idx * CHUNK_SIZE;
             const end = Math.min(file.size, start + CHUNK_SIZE);
             const chunkBlob = file.slice(start, end);
+
+            renderBatchGrid("txBatchContainer", state.totalChunks, idx, "uploading");
 
             const xhr = new XMLHttpRequest();
             currentUploadXhr = xhr;
@@ -531,6 +515,11 @@
                         $("uploadEta").textContent = "Chờ RX...";
                         $("syncIndicator").textContent = "[⏸ CHỜ RX]";
                         showToast("[CHUNK 0 SẴN SÀNG • CHỜ RX KẾT NỐI]");
+                        const firstChip = $("txBatchContainer") ? $("txBatchContainer").querySelector(".batch-chip") : null;
+                        if (firstChip) {
+                            firstChip.className = "batch-chip buffered";
+                            firstChip.textContent = "⏸ Mảnh 1 (Chờ RX)";
+                        }
                         return;
                     }
 
@@ -548,6 +537,47 @@
                     handleChunkError();
                 }
             };
+
+            xhr.onerror = () => {
+                currentUploadXhr = null;
+                if (!state.cancelled) handleChunkError();
+            };
+
+            xhr.onabort = () => {
+                currentUploadXhr = null;
+                hideUploadProgress();
+                $("syncIndicator").textContent = "[ĐÃ HỦY]";
+                showToast("[ĐÃ HỦY TẢI LÊN]");
+            };
+
+            xhr.open("POST", `/${slug}-s/chunk?conn=${cid}`);
+            xhr.setRequestHeader("X-Session-ID", state.sessionId);
+            xhr.setRequestHeader("X-File-Name", encodeURIComponent(file.name));
+            xhr.setRequestHeader("X-File-Size", file.size.toString());
+            xhr.setRequestHeader("X-Chunk-Index", idx.toString());
+            xhr.setRequestHeader("X-Total-Chunks", state.totalChunks.toString());
+            xhr.setRequestHeader("X-Chunk-Size", chunkBlob.size.toString());
+            xhr.send(chunkBlob);
+        };
+
+        function handleChunkError() {
+            if (state.cancelled) return;
+            if (state.retryCount < 3) {
+                state.retryCount++;
+                const delay = Math.pow(2, state.retryCount - 1) * 1000;
+                $("uploadEta").textContent = `Thử lại sau ${delay / 1000}s...`;
+                setTimeout(() => {
+                    if (!state.cancelled) state.uploadNext();
+                }, delay);
+            } else {
+                hideUploadProgress();
+                $("syncIndicator").textContent = "[LỖI MẠNG]";
+                showToast("[LỖI NẠP CHUNK - ĐÃ THỬ LẠI 3 LẦN]");
+            }
+        }
+
+        state.uploadNext();
+    }
 
             xhr.onerror = () => {
                 currentUploadXhr = null;
@@ -680,6 +710,8 @@
         }
         fetch(`/${slug}-s/abort?conn=${getConnId()}`, { method: "POST" }).catch(() => {});
         $("activeFileName").textContent = "-";
+        const batchRow = $("activeFileBatchRow");
+        if (batchRow) batchRow.style.display = "none";
         $("dropzoneBox").style.display = "flex";
         $("fileActiveCard").style.display = "none";
         $("fileUploadProgressCard").style.display = "none";
@@ -722,53 +754,129 @@
 
     $("btnCopyCheat").onclick = () => copyText($("cheatCode").textContent);
     $("btnCopyRecvText").onclick = () => copyText($("recvTextDisplay").querySelector("code").textContent);
-    $("btnDownloadFile").onclick = async (e) => {
+
+    $("btnDownloadFile").onclick = async () => {
+        const fileInfo = recvCurrentFile || { name: $("recvFileName").textContent, size: 0, totalChunks: 1 };
+        const fileName = fileInfo.name && fileInfo.name !== "-" ? fileInfo.name : "download.bin";
+        const totalSize = fileInfo.size || 0;
+        const totalChunks = fileInfo.totalChunks || Math.max(1, Math.ceil(totalSize / CHUNK_SIZE));
+
+        let fileHandle = null;
+        let writable = null;
+
         if (window.showSaveFilePicker) {
-            e.preventDefault();
-            const btn = $("btnDownloadFile");
-            const originalText = btn.textContent;
             try {
-                const name = $("recvFileName").textContent || "download.bin";
-                const handle = await window.showSaveFilePicker({
-                    suggestedName: name
-                });
-                const writable = await handle.createWritable();
-                btn.textContent = "ĐANG TẢI VỀ MÁY...";
-                btn.style.pointerEvents = "none";
-                btn.style.opacity = "0.7";
-
-                const resp = await fetch(`/${slug}-r?conn=${getConnId()}`);
-                if (!resp.ok) {
-                    throw new Error("HTTP error " + resp.status);
-                }
-
-                if (resp.body && resp.body.pipeTo) {
-                    await resp.body.pipeTo(writable);
-                } else if (resp.body) {
-                    const reader = resp.body.getReader();
-                    while (true) {
-                        const { done, value } = await reader.read();
-                        if (done) break;
-                        await writable.write(value);
-                    }
-                    await writable.close();
-                } else {
-                    const blob = await resp.blob();
-                    await writable.write(blob);
-                    await writable.close();
-                }
-                showToast("[TẢI FILE THÀNH CÔNG ✓]");
+                fileHandle = await window.showSaveFilePicker({ suggestedName: fileName });
+                writable = await fileHandle.createWritable();
             } catch (err) {
-                if (err.name !== "AbortError") {
-                    console.warn("Direct-to-disk error, fallback to native download:", err);
-                    location.href = `/${slug}-r?conn=${getConnId()}`;
-                }
-            } finally {
-                btn.textContent = originalText;
-                btn.style.pointerEvents = "auto";
-                btn.style.opacity = "1";
+                if (err.name === "AbortError") return; // Người dùng bấm Hủy
+                console.warn("showSaveFilePicker failed, fallback to memory stream:", err);
             }
         }
+
+        // Bật Bảng điều khiển tiến trình nhận (RX Download Dashboard)
+        $("recvFileReadyCard").style.display = "none";
+        $("recvFileProgressCard").style.display = "flex";
+        $("recvProgressFileName").textContent = fileName;
+        $("recvProgressBar").style.width = "0%";
+        $("recvPercent").textContent = "0%";
+        $("recvTransferred").textContent = `0 KB / ${fmtSize(totalSize)}`;
+        $("recvSpeed").textContent = "0 KB/s";
+        $("recvEta").textContent = "Đang kết nối...";
+
+        renderBatchGrid("rxBatchContainer", totalChunks, 0, "downloading");
+
+        const abortController = new AbortController();
+        recvDownloadController = abortController;
+        const startTime = Date.now();
+        let receivedBytes = 0;
+        const chunks = [];
+
+        try {
+            const resp = await fetch(`/${slug}-r?conn=${getConnId()}`, { signal: abortController.signal });
+            if (!resp.ok) throw new Error("HTTP error " + resp.status);
+
+            const reader = resp.body.getReader();
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                if (writable) {
+                    await writable.write(value);
+                } else {
+                    chunks.push(value);
+                }
+
+                receivedBytes += value.length;
+                const percent = totalSize > 0 ? Math.min(100, Math.round((receivedBytes / totalSize) * 100)) : 100;
+                const currentBatch = Math.min(totalChunks, Math.floor(receivedBytes / CHUNK_SIZE) + 1);
+                const elapsedSec = (Date.now() - startTime) / 1000;
+                let speedBytes = elapsedSec > 0.2 ? (receivedBytes / elapsedSec) : 0;
+                let etaStr = "--";
+                if (speedBytes > 0 && receivedBytes < totalSize) {
+                    const remSec = Math.round((totalSize - receivedBytes) / speedBytes);
+                    etaStr = remSec < 60 ? `~${remSec}s` : `~${Math.floor(remSec / 60)}m ${remSec % 60}s`;
+                }
+
+                $("recvProgressBar").style.width = `${percent}%`;
+                $("recvPercent").textContent = `${percent}%`;
+                $("recvTransferred").textContent = `${fmtSize(receivedBytes)} / ${fmtSize(totalSize)} (Mảnh ${currentBatch}/${totalChunks})`;
+                $("recvSpeed").textContent = fmtSpeed(speedBytes);
+                $("recvEta").textContent = etaStr;
+
+                renderBatchGrid("rxBatchContainer", totalChunks, currentBatch - 1, "downloading");
+            }
+
+            if (writable) {
+                await writable.close();
+                writable = null;
+            } else {
+                // Tải file xuống từ Blob an toàn, chính xác dung lượng 100%
+                const blob = new Blob(chunks, { type: "application/octet-stream" });
+                const blobUrl = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = blobUrl;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => { URL.revokeObjectURL(blobUrl); a.remove(); }, 1000);
+            }
+
+            showToast(`[TẢI VỀ HOÀN TẤT ✓ - ${fmtSize(receivedBytes)}]`);
+            $("recvProgressBar").style.width = "100%";
+            $("recvPercent").textContent = "100%";
+            $("recvEta").textContent = "Hoàn tất ✓";
+            renderBatchGrid("rxBatchContainer", totalChunks, totalChunks, "downloading");
+
+            setTimeout(() => {
+                $("recvFileProgressCard").style.display = "none";
+                showRecvEmpty();
+            }, 2000);
+
+        } catch (err) {
+            if (writable) {
+                try { await writable.abort(); } catch (_) {}
+            }
+            if (err.name !== "AbortError") {
+                console.error("Lỗi tải file RX:", err);
+                showToast("[LỖI TẢI VỀ MÁY]");
+            }
+            $("recvFileProgressCard").style.display = "none";
+            $("recvFileReadyCard").style.display = "flex";
+        } finally {
+            recvDownloadController = null;
+        }
+    };
+
+    $("btnCancelDownload").onclick = () => {
+        if (recvDownloadController) {
+            recvDownloadController.abort();
+            recvDownloadController = null;
+        }
+        $("recvFileProgressCard").style.display = "none";
+        $("recvFileReadyCard").style.display = "flex";
+        showToast("[ĐÃ HỦY TẢI VỀ]");
     };
     $("btnRetryConn").onclick = () => connectSSE(true);
     $("btnUnpair").onclick = () => {

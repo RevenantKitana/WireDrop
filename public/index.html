@@ -116,6 +116,7 @@ Write-Host 'Hello from WireDrop' -ForegroundColor Green
                             <div class="progress-bar-container">
                                 <div id="uploadProgressBar" class="progress-bar-fill" style="width: 0%;"></div>
                             </div>
+                            <div id="txBatchContainer" class="batch-grid" style="display:none;"></div>
                             <div class="upload-metrics-grid">
                                 <div class="metric-item">
                                     <span class="metric-lbl">TIẾN ĐỘ:</span>
@@ -150,6 +151,10 @@ Write-Host 'Hello from WireDrop' -ForegroundColor Green
                                 <div class="file-row">
                                     <span class="file-lbl">Dung lượng:</span>
                                     <span id="activeFileSize">0 KB</span>
+                                </div>
+                                <div class="file-row" id="activeFileBatchRow" style="display:none;">
+                                    <span class="file-lbl">Phân mảnh:</span>
+                                    <span id="activeFileBatchInfo" class="file-note">-</span>
                                 </div>
                                 <div class="file-row">
                                     <span class="file-lbl">Cơ chế:</span>
@@ -193,14 +198,49 @@ Write-Host 'Hello from WireDrop' -ForegroundColor Green
                         <pre id="recvTextDisplay"><code># Chờ dữ liệu từ TX...</code></pre>
                     </div>
                     <div id="recvFileSection" class="form-pane" style="display:none;">
-                        <div class="file-state-box file-ready">
+                        <!-- Thẻ file sẵn sàng để tải -->
+                        <div id="recvFileReadyCard" class="file-state-box file-ready">
                             <div class="file-card-tag">[ NHẬN ĐƯỢC FILE TỪ TX ]</div>
                             <div class="file-card-info">
                                 <h3 id="recvFileName">-</h3>
                                 <p id="recvFileSize">0 KB</p>
+                                <p id="recvFileBatchNote" class="batch-note">-</p>
                             </div>
                             <div class="file-card-action">
-                                <a id="btnDownloadFile" class="btn-black" href="#" download>TẢI FILE VỀ MÁY</a>
+                                <button id="btnDownloadFile" class="btn-black" type="button">TẢI FILE VỀ MÁY</button>
+                            </div>
+                        </div>
+
+                        <!-- Bảng đồng hồ tiến trình nhận file (RX Download Dashboard) -->
+                        <div id="recvFileProgressCard" class="file-state-box file-uploading" style="display:none;">
+                            <div class="file-card-tag">[ TIẾN TRÌNH TẢI VỀ MÁY (RX) ]</div>
+                            <div class="upload-filename-row">
+                                <strong id="recvProgressFileName">-</strong>
+                            </div>
+                            <div class="progress-bar-container">
+                                <div id="recvProgressBar" class="progress-bar-fill" style="width: 0%;"></div>
+                            </div>
+                            <div id="rxBatchContainer" class="batch-grid" style="display:none;"></div>
+                            <div class="upload-metrics-grid">
+                                <div class="metric-item">
+                                    <span class="metric-lbl">TIẾN ĐỘ:</span>
+                                    <strong id="recvPercent" class="metric-val">0%</strong>
+                                </div>
+                                <div class="metric-item">
+                                    <span class="metric-lbl">DUNG LƯỢNG:</span>
+                                    <span id="recvTransferred" class="metric-val">0 KB / 0 KB</span>
+                                </div>
+                                <div class="metric-item">
+                                    <span class="metric-lbl">TỐC ĐỘ:</span>
+                                    <span id="recvSpeed" class="metric-val">0 KB/s</span>
+                                </div>
+                                <div class="metric-item">
+                                    <span class="metric-lbl">DỰ KIẾN:</span>
+                                    <span id="recvEta" class="metric-val">--</span>
+                                </div>
+                            </div>
+                            <div class="file-card-action">
+                                <button id="btnCancelDownload" class="btn-white" type="button">✕ HỦY TẢI VỀ</button>
                             </div>
                         </div>
                     </div>
