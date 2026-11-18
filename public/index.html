@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/style.css?v=0.7.0">
+    <link rel="stylesheet" href="/style.css?v=0.7.1">
 </head>
 <body>
     <div class="wrap">
@@ -208,6 +208,8 @@ Write-Host 'Hello from WireDrop' -ForegroundColor Green
                             </div>
                             <div class="file-card-action">
                                 <button id="btnDownloadFile" class="btn-black" type="button">TẢI FILE VỀ MÁY</button>
+                                <p id="recvMobileNotice" class="mobile-dl-note" style="display:none; font-size: 0.75rem; color: #555; margin-top: 8px;">⚡ Hỗ trợ tải ngầm: Cho phép tắt màn hình hoặc chuyển app.</p>
+                                <a id="linkNativeDownload" href="#" style="display:none; font-size: 0.75rem; color: #777; text-decoration: underline; margin-top: 6px;">Hoặc tải trực tiếp qua trình duyệt (Native)</a>
                             </div>
                         </div>
 
@@ -271,6 +273,6 @@ Write-Host 'Hello from WireDrop' -ForegroundColor Green
     </div>
 
     <div id="toast">[ ĐÃ SAO CHÉP ]</div>
-    <script src="/app.js?v=0.7.0"></script>
+    <script src="/app.js?v=0.7.1"></script>
 </body>
 </html>

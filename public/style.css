@@ -282,9 +282,14 @@ main, #homeView, #senderView, #receiverView {
 .file-note { color: #333; }
 .file-card-action {
     display: flex;
-    justify-content: flex-end;
+    flex-direction: column;
+    align-items: flex-end;
     border-top: 1px dashed #ccc;
     padding-top: 10px;
+}
+.mobile-dl-note {
+    font-weight: 700;
+    letter-spacing: -0.2px;
 }
 
 /* Multi-Batch Flow & Visualizer */

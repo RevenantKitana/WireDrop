@@ -23,6 +23,34 @@
         return cid;
     }
 
+    // Nhận diện thiết bị di động (Mobile User-Agent hoặc màn hình cảm ứng hẹp)
+    function isMobileDevice() {
+        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+               (navigator.maxTouchPoints > 1 && window.innerWidth <= 850);
+    }
+
+    // Quản lý Screen Wake Lock API (Giữ màn hình sáng không bị tự động sleep khi đang truyền tải)
+    let screenWakeLock = null;
+    async function acquireWakeLock() {
+        if ("wakeLock" in navigator) {
+            try {
+                screenWakeLock = await navigator.wakeLock.request("screen");
+                screenWakeLock.addEventListener("release", () => { screenWakeLock = null; });
+            } catch (_) {}
+        }
+    }
+    function releaseWakeLock() {
+        if (screenWakeLock) {
+            screenWakeLock.release().catch(() => {});
+            screenWakeLock = null;
+        }
+    }
+    document.addEventListener("visibilitychange", async () => {
+        if (document.visibilityState === "visible" && isDownloadingRx) {
+            await acquireWakeLock();
+        }
+    });
+
     function showToast(msg) {
         const t = $("toast");
         t.textContent = msg;
@@ -182,7 +210,22 @@
             }
         });
         sse.addEventListener("chunk_ack", e => {
-            if (!isSender) return;
+            if (!isSender) {
+                if (isDownloadingRx) {
+                    try {
+                        const d = JSON.parse(e.data);
+                        const done = (d.index || 0) + 1;
+                        const total = d.total || 1;
+                        const pct = Math.min(100, Math.round((done / total) * 100));
+                        $("recvProgressBar").style.width = `${pct}%`;
+                        $("recvPercent").textContent = `${pct}%`;
+                        $("recvTransferred").textContent = `Mảnh ${done}/${total} (Đã xả vào máy)`;
+                        $("recvEta").textContent = done >= total ? "Đang ghi đĩa..." : "Tải ngầm trong nền...";
+                        renderBatchGrid("rxBatchContainer", total, done, "downloading");
+                    } catch (_) {}
+                }
+                return;
+            }
             try {
                 const d = JSON.parse(e.data);
                 const done = (d.index || 0) + 1;
@@ -226,9 +269,23 @@
                 $("syncIndicator").textContent = "[ĐÃ CHUYỂN ✓]";
                 showToast("[RX ĐÃ NHẬN XONG FILE ✓]");
             }
-            if (!isSender && !isDownloadingRx) {
-                showRecvEmpty();
-                showToast("[DỮ LIỆU ĐÃ RÚT KHỎI DÂY]");
+            if (!isSender) {
+                if (isDownloadingRx) {
+                    $("recvProgressBar").style.width = "100%";
+                    $("recvPercent").textContent = "100%";
+                    $("recvEta").textContent = "Hoàn tất ✓";
+                    renderBatchGrid("rxBatchContainer", recvCurrentFile ? recvCurrentFile.totalChunks : 1, recvCurrentFile ? recvCurrentFile.totalChunks : 1, "downloading");
+                    showToast("[TẢI VỀ HOÀN TẤT ✓]");
+                    releaseWakeLock();
+                    setTimeout(() => {
+                        isDownloadingRx = false;
+                        $("recvFileProgressCard").style.display = "none";
+                        showRecvEmpty();
+                    }, 2000);
+                } else {
+                    showRecvEmpty();
+                    showToast("[DỮ LIỆU ĐÃ RÚT KHỎI DÂY]");
+                }
             }
         });
         sse.onerror = () => {
@@ -339,6 +396,17 @@
         const batchNote = $("recvFileBatchNote");
         if (batchNote) {
             batchNote.textContent = tChunks > 1 ? `Đa Mảnh: ${tChunks} mảnh × ${fmtSize(cSize)}` : `Đơn Mảnh: 1 mảnh nguyên vẹn (${fmtSize(size)})`;
+        }
+        const mobileNotice = $("recvMobileNotice");
+        const linkNative = $("linkNativeDownload");
+        if (isMobileDevice()) {
+            if (mobileNotice) mobileNotice.style.display = "block";
+            if (linkNative) linkNative.style.display = "none";
+            $("btnDownloadFile").textContent = "TẢI VỀ MÁY (CHẠY NGẦM)";
+        } else {
+            if (mobileNotice) mobileNotice.style.display = "none";
+            if (linkNative) linkNative.style.display = window.showSaveFilePicker ? "inline-block" : "none";
+            $("btnDownloadFile").textContent = "TẢI FILE VỀ MÁY";
         }
         $("btnCopyRecvText").style.display = "none";
     }
@@ -810,27 +878,35 @@
     $("btnCopyCheat").onclick = () => copyText($("cheatCode").textContent);
     $("btnCopyRecvText").onclick = () => copyText($("recvTextDisplay").querySelector("code").textContent);
 
-    $("btnDownloadFile").onclick = async () => {
-        const fileInfo = recvCurrentFile || { name: $("recvFileName").textContent, size: 0, totalChunks: 1 };
-        const fileName = fileInfo.name && fileInfo.name !== "-" ? fileInfo.name : "download.bin";
-        const totalSize = fileInfo.size || 0;
-        let chunkSize = fileInfo.chunkSize || getOptimalChunkSize(totalSize);
-        let totalChunks = fileInfo.totalChunks || Math.max(1, Math.ceil(totalSize / chunkSize));
+    // Chế độ 1: Tải trực tiếp bằng Trình quản lý của Hệ điều hành (Native OS Download)
+    // Dành cho Mobile (iOS Safari / Android Chrome) hoặc khi không có File System Access API
+    // -> Ghi thẳng xuống ổ đĩa, 0 Byte RAM JavaScript, cho phép tắt màn hình, khóa máy hoặc chuyển app
+    async function startNativeDownload(fileName, totalSize, totalChunks, chunkSize) {
+        await acquireWakeLock();
+        isDownloadingRx = true;
+        $("recvFileReadyCard").style.display = "none";
+        $("recvFileProgressCard").style.display = "flex";
+        $("recvProgressFileName").textContent = fileName;
+        $("recvProgressBar").style.width = "0%";
+        $("recvPercent").textContent = "0%";
+        $("recvTransferred").textContent = `0 KB / ${fmtSize(totalSize)}`;
+        $("recvSpeed").textContent = "Native OS";
+        $("recvEta").textContent = "Tải ngầm trong nền...";
+        $("rxBatchContainer").style.display = totalChunks > 1 ? "flex" : "none";
+        renderBatchGrid("rxBatchContainer", totalChunks, 0, "downloading");
 
-        let fileHandle = null;
-        let writable = null;
+        const a = document.createElement("a");
+        a.href = `/${slug}-r?conn=${getConnId()}`;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => a.remove(), 1000);
+        showToast("[BẮT ĐẦU TẢI NGẦM - CHO PHÉP TẮT MÀN HÌNH]");
+    }
 
-        if (window.showSaveFilePicker) {
-            try {
-                fileHandle = await window.showSaveFilePicker({ suggestedName: fileName });
-                writable = await fileHandle.createWritable();
-            } catch (err) {
-                if (err.name === "AbortError") return; // Người dùng bấm Hủy
-                console.warn("showSaveFilePicker failed, fallback to memory stream:", err);
-            }
-        }
-
-        // Bật Bảng điều khiển tiến trình nhận (RX Download Dashboard)
+    // Chế độ 2: Stream trực tiếp xuống file đã chọn trên ổ cứng (Desktop Chromium)
+    async function startDiskStreamDownload(fileName, totalSize, totalChunks, chunkSize, writable) {
+        await acquireWakeLock();
         isDownloadingRx = true;
         $("recvFileReadyCard").style.display = "none";
         $("recvFileProgressCard").style.display = "flex";
@@ -841,13 +917,13 @@
         $("recvSpeed").textContent = "0 KB/s";
         $("recvEta").textContent = "Đang kết nối...";
 
+        $("rxBatchContainer").style.display = totalChunks > 1 ? "flex" : "none";
         renderBatchGrid("rxBatchContainer", totalChunks, 0, "downloading");
 
         const abortController = new AbortController();
         recvDownloadController = abortController;
         const startTime = Date.now();
         let receivedBytes = 0;
-        const chunks = [];
 
         try {
             const resp = await fetch(`/${slug}-r?conn=${getConnId()}`, { signal: abortController.signal });
@@ -864,13 +940,9 @@
                 const { done, value } = await reader.read();
                 if (done) break;
 
-                if (writable) {
-                    await writable.write(value);
-                } else {
-                    chunks.push(value);
-                }
-
+                await writable.write(value);
                 receivedBytes += value.length;
+
                 const percent = totalSize > 0 ? Math.min(100, Math.round((receivedBytes / totalSize) * 100)) : 100;
                 const currentBatch = Math.min(totalChunks, Math.floor(receivedBytes / chunkSize) + 1);
                 const elapsedSec = (Date.now() - startTime) / 1000;
@@ -890,20 +962,8 @@
                 renderBatchGrid("rxBatchContainer", totalChunks, currentBatch - 1, "downloading");
             }
 
-            if (writable) {
-                await writable.close();
-                writable = null;
-            } else {
-                // Tải file xuống từ Blob an toàn, chính xác dung lượng 100%
-                const blob = new Blob(chunks, { type: "application/octet-stream" });
-                const blobUrl = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = blobUrl;
-                a.download = fileName;
-                document.body.appendChild(a);
-                a.click();
-                setTimeout(() => { URL.revokeObjectURL(blobUrl); a.remove(); }, 1000);
-            }
+            await writable.close();
+            writable = null;
 
             showToast(`[TẢI VỀ HOÀN TẤT ✓ - ${fmtSize(receivedBytes)}]`);
             $("recvProgressBar").style.width = "100%";
@@ -913,12 +973,14 @@
 
             setTimeout(() => {
                 isDownloadingRx = false;
+                releaseWakeLock();
                 $("recvFileProgressCard").style.display = "none";
                 showRecvEmpty();
             }, 1800);
 
         } catch (err) {
             isDownloadingRx = false;
+            releaseWakeLock();
             if (writable) {
                 try { await writable.abort(); } catch (_) {}
             }
@@ -931,10 +993,49 @@
         } finally {
             recvDownloadController = null;
         }
+    }
+
+    $("btnDownloadFile").onclick = async () => {
+        const fileInfo = recvCurrentFile || { name: $("recvFileName").textContent, size: 0, totalChunks: 1 };
+        const fileName = fileInfo.name && fileInfo.name !== "-" ? fileInfo.name : "download.bin";
+        const totalSize = fileInfo.size || 0;
+        let chunkSize = fileInfo.chunkSize || getOptimalChunkSize(totalSize);
+        let totalChunks = fileInfo.totalChunks || Math.max(1, Math.ceil(totalSize / chunkSize));
+
+        // 1. Trên Mobile HOẶC trình duyệt không hỗ trợ File System Access API:
+        // Luôn ưu tiên Native OS Download để tắt màn hình, khóa máy vẫn tải ngầm 100%
+        if (isMobileDevice() || !window.showSaveFilePicker) {
+            startNativeDownload(fileName, totalSize, totalChunks, chunkSize);
+            return;
+        }
+
+        // 2. Trên Desktop Chromium (có showSaveFilePicker):
+        try {
+            const fileHandle = await window.showSaveFilePicker({ suggestedName: fileName });
+            const writable = await fileHandle.createWritable();
+            startDiskStreamDownload(fileName, totalSize, totalChunks, chunkSize, writable);
+        } catch (err) {
+            if (err.name === "AbortError") return; // Người dùng bấm Hủy
+            console.warn("showSaveFilePicker failed, fallback to native download:", err);
+            startNativeDownload(fileName, totalSize, totalChunks, chunkSize);
+        }
     };
+
+    if ($("linkNativeDownload")) {
+        $("linkNativeDownload").onclick = e => {
+            e.preventDefault();
+            const fileInfo = recvCurrentFile || { name: $("recvFileName").textContent, size: 0, totalChunks: 1 };
+            const fileName = fileInfo.name && fileInfo.name !== "-" ? fileInfo.name : "download.bin";
+            const totalSize = fileInfo.size || 0;
+            let chunkSize = fileInfo.chunkSize || getOptimalChunkSize(totalSize);
+            let totalChunks = fileInfo.totalChunks || Math.max(1, Math.ceil(totalSize / chunkSize));
+            startNativeDownload(fileName, totalSize, totalChunks, chunkSize);
+        };
+    }
 
     $("btnCancelDownload").onclick = () => {
         isDownloadingRx = false;
+        releaseWakeLock();
         if (recvDownloadController) {
             recvDownloadController.abort();
             recvDownloadController = null;

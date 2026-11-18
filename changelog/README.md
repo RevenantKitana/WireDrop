@@ -9,7 +9,8 @@ Mọi file được đặt tên theo quy chuẩn: `NN-v0.X.Y-<slug>.md` để đ
 ## Danh Sách Changelog Theo Các Giai Đoạn Phát Triển:
 
 ### ⚡ Giai Đoạn 7: Turbo Transfer Engine - Vi Khung Sub-Chunk & Pipelining (v0.7.x)
-* [25-v0.7.0 - Động Cơ Tăng Tốc Turbo HTTP Core: Vi Khung Sub-Chunk 256KB, Pipelining Song Luồng & Adaptive Chunks](25-v0.7.0-turbo-http-core-subchunk-and-pipelining.md) - *(2026-11-18)* 🚀 **Mới nhất (State hiện tại)**
+* [26-v0.7.1 - Tải File Nền Cho Thiết Bị Di Động: Native OS Download, Chống Ngắt Khi Tắt Màn Hình & Screen Wake Lock](26-v0.7.1-mobile-native-download-and-wakelock.md) - *(2026-11-18)* 🚀 **Mới nhất (State hiện tại)**
+* [25-v0.7.0 - Động Cơ Tăng Tốc Turbo HTTP Core: Vi Khung Sub-Chunk 256KB, Pipelining Song Luồng & Adaptive Chunks](25-v0.7.0-turbo-http-core-subchunk-and-pipelining.md) - *(2026-11-18)*
 
 ### 📦 Giai Đoạn 6: 16MB Chunked Dual-Buffering Backpressure Pipe (v0.6.x)
 * [24-v0.6.2 - Khắc Phục Lỗi Trắng Trang Chủ (/#), Bảo Vệ Giao Diện Stream TX/RX & Hỗ Trợ Tên File Tiếng Việt UTF-8](24-v0.6.2-fix-blank-home-js-syntax-and-stream-ui-guard.md) - *(2026-11-18)*

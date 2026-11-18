@@ -974,3 +974,89 @@ func TestMidChunkRetryDeduplication(t *testing.T) {
 		t.Fatalf("Timeout chờ RX kéo xong")
 	}
 }
+
+func TestMobileNativeDownloadHeadersAndWakeLock(t *testing.T) {
+	handler := createHandler()
+	ts := httptest.NewServer(handler)
+	defer ts.Close()
+
+	slug := "mobiledl"
+	fileName := "video_sample_clip.mp4"
+	chunkSize := 512 * 1024 // 512KB
+	totalChunks := 2
+	totalSize := int64(chunkSize * totalChunks)
+	testData := bytes.Repeat([]byte("M"), int(totalSize))
+
+	// 1. Upload chunk 0
+	req0, _ := http.NewRequest("POST", fmt.Sprintf("%s/%s-s/chunk?conn=tx_mob", ts.URL, slug), bytes.NewReader(testData[:chunkSize]))
+	req0.Header.Set("X-Session-ID", "sess_mob")
+	req0.Header.Set("X-File-Name", fileName)
+	req0.Header.Set("X-File-Size", fmt.Sprintf("%d", totalSize))
+	req0.Header.Set("X-Chunk-Index", "0")
+	req0.Header.Set("X-Total-Chunks", fmt.Sprintf("%d", totalChunks))
+	req0.Header.Set("X-Chunk-Size", fmt.Sprintf("%d", chunkSize))
+	r0, err := http.DefaultClient.Do(req0)
+	if err != nil || r0.StatusCode != http.StatusOK {
+		t.Fatalf("Upload chunk 0 err: %v", err)
+	}
+	r0.Body.Close()
+
+	// 2. Giả lập trình duyệt Mobile Safari / Chrome trigger Native Download:
+	// GET /mobiledl-r?conn=c_mobile123 với User-Agent Mobile
+	rxDataChan := make(chan []byte, 1)
+	rxHeadersChan := make(chan http.Header, 1)
+	go func() {
+		rxReq, _ := http.NewRequest("GET", fmt.Sprintf("%s/%s-r?conn=c_mobile123", ts.URL, slug), nil)
+		rxReq.Header.Set("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1")
+		resp, rxErr := http.DefaultClient.Do(rxReq)
+		if rxErr != nil {
+			t.Errorf("Native download request error: %v", rxErr)
+			return
+		}
+		defer resp.Body.Close()
+		rxHeadersChan <- resp.Header
+		data, _ := io.ReadAll(resp.Body)
+		rxDataChan <- data
+	}()
+
+	// 3. Upload chunk 1
+	req1, _ := http.NewRequest("POST", fmt.Sprintf("%s/%s-s/chunk?conn=tx_mob", ts.URL, slug), bytes.NewReader(testData[chunkSize:]))
+	req1.Header.Set("X-Session-ID", "sess_mob")
+	req1.Header.Set("X-File-Name", fileName)
+	req1.Header.Set("X-File-Size", fmt.Sprintf("%d", totalSize))
+	req1.Header.Set("X-Chunk-Index", "1")
+	req1.Header.Set("X-Total-Chunks", fmt.Sprintf("%d", totalChunks))
+	req1.Header.Set("X-Chunk-Size", fmt.Sprintf("%d", chunkSize))
+	r1, err := http.DefaultClient.Do(req1)
+	if err != nil || r1.StatusCode != http.StatusOK {
+		t.Fatalf("Upload chunk 1 err: %v", err)
+	}
+	r1.Body.Close()
+
+	// 4. Kiểm tra headers để đảm bảo OS Download Manager nhận diện đúng file download
+	select {
+	case headers := <-rxHeadersChan:
+		disp := headers.Get("Content-Disposition")
+		if !strings.Contains(disp, "attachment") || !strings.Contains(disp, fileName) {
+			t.Errorf("Content-Disposition không chuẩn Native Download: %q", disp)
+		}
+		if headers.Get("Content-Type") != "application/octet-stream" {
+			t.Errorf("Content-Type kỳ vọng application/octet-stream, nhận %q", headers.Get("Content-Type"))
+		}
+		if headers.Get("Content-Length") != fmt.Sprintf("%d", totalSize) {
+			t.Errorf("Content-Length kỳ vọng %d, nhận %q", totalSize, headers.Get("Content-Length"))
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatalf("Timeout chờ headers Native Download")
+	}
+
+	// 5. Kiểm tra toàn vẹn dữ liệu
+	select {
+	case dlData := <-rxDataChan:
+		if !bytes.Equal(dlData, testData) {
+			t.Errorf("Dữ liệu Native Download không khớp!")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatalf("Timeout chờ dữ liệu Native Download")
+	}
+}
