@@ -2,7 +2,9 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,15 +21,16 @@ import (
 
 // EnvConfig lưu cấu hình đọc từ file .env
 type EnvConfig struct {
-	Port            string
-	CloudflareToken string
-	CustomDomain    string
-	TunnelProtocol  string
+	Port             string
+	CloudflareToken  string
+	CustomDomain     string
+	TunnelProtocol   string
+	ShortlinkGateway string
 }
 
 // loadEnvFile tìm và đọc file .env
 func loadEnvFile(dir string) EnvConfig {
-	cfg := EnvConfig{Port: "8080", TunnelProtocol: "http2"}
+	cfg := EnvConfig{Port: "8080", TunnelProtocol: "http2", ShortlinkGateway: "https://s.wd.io.vn"}
 
 	// Tìm .env ở thư mục exe hoặc thư mục làm việc hiện tại
 	envPaths := []string{
@@ -62,6 +65,8 @@ func loadEnvFile(dir string) EnvConfig {
 						if val != "" {
 							cfg.TunnelProtocol = strings.ToLower(val)
 						}
+					case "SHORTLINK_GATEWAY":
+						cfg.ShortlinkGateway = val
 					}
 				}
 			}
@@ -78,8 +83,12 @@ func saveEnvFile(dir string, cfg EnvConfig) error {
 	if proto == "" {
 		proto = "http2"
 	}
-	content := fmt.Sprintf("# WireDrop FastHosting Configuration\nPORT=%s\nCLOUDFLARE_TUNNEL_TOKEN=%s\nCUSTOM_DOMAIN=%s\nTUNNEL_PROTOCOL=%s\n",
-		cfg.Port, cfg.CloudflareToken, cfg.CustomDomain, proto)
+	gw := cfg.ShortlinkGateway
+	if gw == "" {
+		gw = "https://s.wd.io.vn"
+	}
+	content := fmt.Sprintf("# WireDrop FastHosting Configuration\nPORT=%s\nCLOUDFLARE_TUNNEL_TOKEN=%s\nCUSTOM_DOMAIN=%s\nTUNNEL_PROTOCOL=%s\nSHORTLINK_GATEWAY=%s\n",
+		cfg.Port, cfg.CloudflareToken, cfg.CustomDomain, proto, gw)
 	return os.WriteFile(p, []byte(content), 0644)
 }
 
@@ -500,23 +509,64 @@ func runTunnelFlow(exeDir string, cfg EnvConfig, isQuick bool) {
 	}
 
 	randSlug := randomSlug(4)
+
+	var shortURL_R, shortURL_S string
+	if isQuick && cfg.ShortlinkGateway != "" && !strings.EqualFold(cfg.ShortlinkGateway, "none") {
+		fmt.Printf("[*] Dang dang ky Shortlink tren %s...", cfg.ShortlinkGateway)
+		shortURL_R, shortURL_S = registerShortlinkWithGateway(cfg.ShortlinkGateway, randSlug, activeURL)
+		if shortURL_R != "" {
+			fmt.Println(" [THANH CONG]")
+		} else {
+			fmt.Println(" [BO QUA (Fallback link goc)]")
+		}
+	}
+
+	// Duy trì gia hạn TTL shortlink mỗi 15 phút nếu có shortlink
+	if shortURL_R != "" {
+		go func() {
+			ticker := time.NewTicker(15 * time.Minute)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					_, _ = registerShortlinkWithGateway(cfg.ShortlinkGateway, randSlug, activeURL)
+				case <-sigChan:
+					return
+				}
+			}
+		}()
+	}
+
 	fmt.Println()
 	fmt.Println("================================================================")
 	if isQuick {
-		fmt.Println("       WIREDROP FASTHOST ONLINE (DOMAIN NGAU NHIEN)             ")
+		fmt.Println("       WIREDROP FASTHOST ONLINE (TURBO CORE v0.7.1)             ")
 	} else {
 		fmt.Println("       WIREDROP FASTHOST ONLINE (DOMAIN CA NHAN CO DINH)        ")
 	}
 	fmt.Println("================================================================")
-	fmt.Printf(" • Web Hub (Trang chu #):   %s/#\n", activeURL)
-	fmt.Println("   (Mo link tren de xem Cheatsheet hoac tu tao phong tuy y)")
-	fmt.Println()
-	fmt.Printf(" • Vi du truyen nhanh (Phong mau ngau nhien: %s):\n", randSlug)
-	fmt.Printf("   - Web phat (TX):         %s/%s-s\n", activeURL, randSlug)
-	fmt.Println("   - Lenh nhan (RX):")
-	fmt.Printf("     Linux/macOS:           curl -sL %s/%s-r | sh\n", activeURL, randSlug)
-	fmt.Printf("     Windows PowerShell:    irm %s/%s-r | iex\n", activeURL, randSlug)
-	fmt.Printf("     Tai File:              curl -sLJO %s/%s-r\n", activeURL, randSlug)
+	if shortURL_R != "" {
+		fmt.Printf(" • Link Nhan Nhanh (Go tay tren Mobile):   %s\n", shortURL_R)
+		fmt.Println("   (Dung luong 0 Byte RAM, cho phep tat man hinh tren dien thoai)")
+		fmt.Println()
+		fmt.Println(" • Lenh Nhan Nhanh (CLI):")
+		fmt.Printf("   Linux/macOS:           curl -sL %s | sh\n", shortURL_R)
+		fmt.Printf("   Windows PowerShell:    irm %s | iex\n", shortURL_R)
+		fmt.Printf("   Tai File:              curl -sLJO %s\n", shortURL_R)
+		fmt.Println()
+		fmt.Printf(" • Web Phat (TX):         %s\n", shortURL_S)
+		fmt.Printf(" • Duong ham goc:         %s/%s-s\n", activeURL, randSlug)
+	} else {
+		fmt.Printf(" • Web Hub (Trang chu #):   %s/#\n", activeURL)
+		fmt.Println("   (Mo link tren de xem Cheatsheet hoac tu tao phong tuy y)")
+		fmt.Println()
+		fmt.Printf(" • Vi du truyen nhanh (Phong mau ngau nhien: %s):\n", randSlug)
+		fmt.Printf("   - Web phat (TX):         %s/%s-s\n", activeURL, randSlug)
+		fmt.Println("   - Lenh nhan (RX):")
+		fmt.Printf("     Linux/macOS:           curl -sL %s/%s-r | sh\n", activeURL, randSlug)
+		fmt.Printf("     Windows PowerShell:    irm %s/%s-r | iex\n", activeURL, randSlug)
+		fmt.Printf("     Tai File:              curl -sLJO %s/%s-r\n", activeURL, randSlug)
+	}
 	if isQuick {
 		fmt.Println("----------------------------------------------------------------")
 		fmt.Println(" [!] Luu y: Mot so nha mang VN (Viettel/VNPT/FPT) chan trycloudflare.com")
@@ -557,4 +607,40 @@ func logFatalIfInteractive(msg string) {
 	fmt.Println(msg)
 	pauseOnExit()
 	os.Exit(1)
+}
+
+// registerShortlinkWithGateway đăng ký slug và targetURL với Shortlink Gateway
+func registerShortlinkWithGateway(gatewayURL, slug, targetURL string) (string, string) {
+	gatewayURL = strings.TrimRight(strings.TrimSpace(gatewayURL), "/")
+	if gatewayURL == "" || strings.EqualFold(gatewayURL, "none") {
+		return "", ""
+	}
+
+	reqBody, _ := json.Marshal(map[string]interface{}{
+		"slug":   slug,
+		"target": targetURL,
+		"ttl":    1800,
+	})
+
+	client := &http.Client{Timeout: 3500 * time.Millisecond}
+	resp, err := client.Post(gatewayURL+"/register", "application/json", bytes.NewReader(reqBody))
+	if err != nil {
+		return "", ""
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", ""
+	}
+
+	var res struct {
+		Status string `json:"status"`
+		ShortR string `json:"short_r"`
+		ShortS string `json:"short_s"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return "", ""
+	}
+
+	return res.ShortR, res.ShortS
 }

@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-const Version = "v0.7.1"
+const Version = "v0.7.2"
 const defaultSlugChars = "abcdefghijklmnopqrstuvwxyz0123456789"
 
 func randomSlug(n int) string {

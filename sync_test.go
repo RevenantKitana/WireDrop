@@ -1060,3 +1060,43 @@ func TestMobileNativeDownloadHeadersAndWakeLock(t *testing.T) {
 		t.Fatalf("Timeout chờ dữ liệu Native Download")
 	}
 }
+
+func TestShortlinkGatewayRegistration(t *testing.T) {
+	// 1. Mock Shortlink Gateway HTTP Server
+	mockGateway := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/register" && r.Method == http.MethodPost {
+			var body map[string]interface{}
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			slug := body["slug"].(string)
+
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"status":  "ok",
+				"slug":    slug,
+				"short_r": fmt.Sprintf("https://s.wd.io.vn/%s-r", slug),
+				"short_s": fmt.Sprintf("https://s.wd.io.vn/%s-s", slug),
+			})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer mockGateway.Close()
+
+	// 2. Test đăng ký thành công
+	shortR, shortS := registerShortlinkWithGateway(mockGateway.URL, "vip99", "https://rapidly-mock-tunnel.trycloudflare.com")
+	if shortR != "https://s.wd.io.vn/vip99-r" || shortS != "https://s.wd.io.vn/vip99-s" {
+		t.Errorf("Đăng ký shortlink thất bại: shortR=%q, shortS=%q", shortR, shortS)
+	}
+
+	// 3. Test trường hợp Gateway bị lỗi hoặc sập (Fallback an toàn, không panic)
+	failedR, failedS := registerShortlinkWithGateway("http://127.0.0.1:59999", "vip99", "https://rapidly-mock-tunnel.trycloudflare.com")
+	if failedR != "" || failedS != "" {
+		t.Errorf("Kỳ vọng trả về rỗng khi gateway sập, nhận shortR=%q, shortS=%q", failedR, failedS)
+	}
+
+	// 4. Test khi cấu hình 'none' (Tắt shortlink)
+	noneR, noneS := registerShortlinkWithGateway("none", "vip99", "https://rapidly-mock-tunnel.trycloudflare.com")
+	if noneR != "" || noneS != "" {
+		t.Errorf("Kỳ vọng trả về rỗng khi gateway='none', nhận shortR=%q, shortS=%q", noneR, noneS)
+	}
+}

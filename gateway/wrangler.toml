@@ -1,0 +1,13 @@
+name = "wiredrop-shortlink-gateway"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# Cấu hình Custom Domain trên Cloudflare
+routes = [
+  { pattern = "s.wd.io.vn/*", zone_name = "wd.io.vn" }
+]
+
+# Liên kết Cloudflare KV Namespace (Cần tạo KV tên WIREDROP_KV trên Dashboard)
+[[kv_namespaces]]
+binding = "WIREDROP_KV"
+id = "<YOUR_KV_NAMESPACE_ID>"
