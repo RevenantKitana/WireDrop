@@ -4,8 +4,8 @@
 
 [![Go Version](https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go)](https://golang.org)
 [![Dependencies](https://img.shields.io/badge/Dependencies-Zero%20(Standard%20Library)-brightgreen)](https://golang.org/pkg/)
-[![Version](https://img.shields.io/badge/Version-v0.5.2-blue)](changelog/README.md)
-[![Architecture](https://img.shields.io/badge/Architecture-Two--Ended%20Wire%20(Physical%20Lock)-purple)](SPECIFICATION.md)
+[![Version](https://img.shields.io/badge/Version-v0.6.2-blue)](changelog/README.md)
+[![Architecture](https://img.shields.io/badge/Architecture-Two--Ended%20Wire%20(Physical%20Lock)-purple)](spec/README.md)
 [![License](https://img.shields.io/badge/License-MIT-orange.svg)](LICENSE)
 
 ---
@@ -160,16 +160,17 @@ cloudflared tunnel --url http://localhost:8080
 ```text
 WireDrop/
 ├── main.go            # Entry point, routing Go 1.22+ ServeMux, embedded assets
-├── room.go            # Quản lý PipeSlot, khóa kết nối ActiveConn, Mutex RAM, TTL cleaner
-├── handler_pipe.go    # Điều phối đầu *-s / *-r, streaming flusher, SSE events
+├── room.go            # Quản lý PipeSlot, ChunkSession, khóa ActiveConn, Mutex RAM, TTL cleaner
+├── handler_pipe.go    # Điều phối đầu *-s / *-r, 16MB chunked pipe, streaming flusher, SSE events
+├── host.go            # Công cụ FastHost tích hợp tự động Cloudflare Tunnel cho bản Portable
 ├── go.mod             # Module definition (Zero third-party dependencies)
 ├── Dockerfile         # Multi-stage build (Alpine -> Scratch ~7MB)
-├── SPECIFICATION.md   # Tài liệu đặc tả kiến trúc v4.0.0
-├── public/            # Giao diện Web SPA Dark Mode được nhúng tĩnh
-│   ├── index.html     # HTML phân tách Sender View vs Receiver View, Lockout Modal 409
-│   ├── style.css      # Dark Mode CSS, animation hiệu ứng kết nối
-│   └── app.js         # Auto-save, Drag & Drop, conn_id logic, SSE listener
-└── changelog/         # Lịch sử phát triển chi tiết từng mốc phiên bản
+├── public/            # Giao diện Web SPA Retro Monochrome Minimalist được nhúng tĩnh
+│   ├── index.html     # HTML thống nhất Home / Sender / Receiver View & Multi-Batch Dashboard
+│   ├── style.css      # Giao diện đơn sắc tối giản, lưới mảnh .batch-grid
+│   └── app.js         # Chunked Ping-Pong Upload, Direct-to-Disk RX Stream, SSE & Hybrid Sync
+├── spec/              # Kho tài liệu Đặc tả Kiến trúc (APPROVED SPEC) & Chuẩn bị Đặc tả (SPEC-PREPARE)
+└── changelog/         # Lịch sử phát triển chi tiết từng mốc phiên bản (Sort-Safe Naming)
 ```
 
 ---

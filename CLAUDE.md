@@ -1,4 +1,4 @@
-l# CLAUDE.md - Quy Tắc Quản Lý Dự Án & Chuẩn Phát Triển WireDrop
+# CLAUDE.md - Quy Tắc Quản Lý Dự Án & Chuẩn Phát Triển WireDrop
 
 ---
 
@@ -34,6 +34,13 @@ Mỗi file changelog bắt buộc phải có các mục sau:
 ### 1.4. Single Source of Truth cho Phiên Bản
 * Hằng số phiên bản duy nhất được định nghĩa trong [main.go](main.go): `const Version = "v0.X.Y"`.
 * Toàn bộ banner terminal, log khởi động, giao diện Web và các tài liệu đều phải đồng bộ chính xác với hằng số này.
+
+### 1.5. Quy Tắc Quản Lý Tài Liệu Đặc Tả Kiến Trúc (`spec/`)
+* Toàn bộ tài liệu thiết kế kiến trúc và chuẩn bị đặc tả (`SPEC-PREPARE` / `APPROVED SPEC`) được gom tập trung trong thư mục `spec/` (tuyệt đối không để rời rạc ngoài thư mục gốc).
+* **Định dạng đặt tên (Sort-Safe):** `spec/NN-<slug-kien-truc>.md` (ví dụ: `spec/03-specprepare-turbo-transfer-optimization.md`).
+* **Quy trình 2 bước trước mọi tính năng lớn (`MINOR v0.X.0`):**
+  1. Viết `spec/NN-specprepare-<slug>.md` để phân tích điểm nghẽn, các ca biên (edge cases) và bảng câu hỏi quyết định (*Decision Matrix*).
+  2. Sau khi thống nhất phương án, cập nhật trạng thái sang `APPROVED SPEC` và liên kết đầy đủ trong [spec/README.md](spec/README.md).
 
 ---
 
