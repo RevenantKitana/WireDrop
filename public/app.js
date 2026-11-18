@@ -101,6 +101,11 @@
         });
     }
 
+    let recvCurrentFile = null;
+    let recvDownloadController = null;
+    let isDownloadingRx = false;
+    const isUploadingTx = () => !!(chunkUploadState || currentUploadXhr);
+
     function startPolling(role, cid) {
         if (pollTimer) clearInterval(pollTimer);
         pollTimer = setInterval(() => {
@@ -116,10 +121,15 @@
                             chunkUploadState.uploadNext();
                         }
                         if (!isSender) {
-                            renderPayload(d);
-                        } else {
+                            if (!isDownloadingRx) renderPayload(d);
+                        } else if (!isUploadingTx()) {
                             if (d.slot_type === 2 && $("activeFileName").textContent !== d.slot_file_name) {
                                 showActiveFile(d.slot_file_name, d.slot_file_size, d.total_chunks);
+                            } else if (d.slot_type === 0 && $("activeFileName").textContent !== "-") {
+                                $("activeFileName").textContent = "-";
+                                if ($("activeFileBatchRow")) $("activeFileBatchRow").style.display = "none";
+                                showFileDropzone();
+                                $("syncIndicator").textContent = "[ĐÃ CHUYỂN ✓]";
                             } else if (d.slot_type === 1 && !$("btnModeFile").classList.contains("active") && !typing) {
                                 if ($("senderTextarea").value !== (d.slot_text || "")) {
                                     $("senderTextarea").value = d.slot_text || "";
@@ -161,7 +171,6 @@
             if (isSender) showToast("[RX ĐÃ NGẮT]");
         });
         sse.addEventListener("rx_connected", () => {
-            const nr = $("nodeReceiver");
             setPairStatus(true, $("nodeSender") ? $("nodeSender").textContent.includes("●") : true);
             if (isSender) {
                 showToast("[RX ĐÃ BẮT ĐẦU KÉO FILE]");
@@ -172,7 +181,20 @@
                 }
             }
         });
-        sse.addEventListener("chunk_ack", () => {});
+        sse.addEventListener("chunk_ack", e => {
+            if (!isSender) return;
+            try {
+                const d = JSON.parse(e.data);
+                const done = (d.index || 0) + 1;
+                const total = d.total || 1;
+                const batchInfo = $("activeFileBatchInfo");
+                if (batchInfo && $("fileActiveCard").style.display === "flex") {
+                    batchInfo.textContent = done < total
+                        ? `RX đang kéo mảnh ${done}/${total}...`
+                        : `RX đã nhận đủ ${total}/${total} mảnh ✓`;
+                }
+            } catch (_) {}
+        });
         sse.addEventListener("sender_paired", () => {
             const nr = $("nodeReceiver");
             setPairStatus(nr ? nr.textContent.includes("●") : false, true);
@@ -186,18 +208,28 @@
         sse.addEventListener("payload_updated", e => {
             const d = JSON.parse(e.data);
             if (isSender) {
-                if (d.type === "file") {
+                if (d.type === "file" && !isUploadingTx()) {
                     showActiveFile(d.name, d.size, d.total_chunks);
-                } else if (d.type === "text" && !typing) {
+                } else if (d.type === "text" && !typing && !isUploadingTx()) {
                     $("senderTextarea").value = d.content || "";
                 }
             }
-            if (!isSender) {
+            if (!isSender && !isDownloadingRx) {
                 d.type === "text" ? showRecvText(d.content) : showRecvFile(d.name, d.size, d.total_chunks);
             }
         });
         sse.addEventListener("payload_cleared", () => {
-            if (!isSender) { showRecvEmpty(); showToast("[DỮ LIỆU ĐÃ RÚT KHỎI DÂY]"); }
+            if (isSender && !isUploadingTx() && $("activeFileName").textContent !== "-") {
+                $("activeFileName").textContent = "-";
+                if ($("activeFileBatchRow")) $("activeFileBatchRow").style.display = "none";
+                showFileDropzone();
+                $("syncIndicator").textContent = "[ĐÃ CHUYỂN ✓]";
+                showToast("[RX ĐÃ NHẬN XONG FILE ✓]");
+            }
+            if (!isSender && !isDownloadingRx) {
+                showRecvEmpty();
+                showToast("[DỮ LIỆU ĐÃ RÚT KHỎI DÂY]");
+            }
         });
         sse.onerror = () => {
             fetch(`/${slug}/events?role=${role}&conn=${cid}&check=1`).then(r => {
@@ -215,6 +247,7 @@
 
     function renderPayload(d) {
         if (isSender) {
+            if (isUploadingTx()) return;
             if (d.slot_type === 2) {
                 showActiveFile(d.slot_file_name, d.slot_file_size, d.total_chunks);
             } else if ($("btnModeFile").classList.contains("active") || location.search.includes("mode=file") || location.hash === "#file") {
@@ -224,6 +257,7 @@
                 showTextEditor();
             }
         } else {
+            if (isDownloadingRx) return;
             if (d.slot_type === 2) showRecvFile(d.slot_file_name, d.slot_file_size, d.total_chunks);
             else if (d.slot_type === 1 && d.slot_text) showRecvText(d.slot_text);
             else showRecvEmpty();
@@ -282,9 +316,6 @@
         $("recvTextDisplay").querySelector("code").textContent = txt || "# (trống)";
         $("btnCopyRecvText").style.display = "inline-block";
     }
-
-    let recvCurrentFile = null;
-    let recvDownloadController = null;
 
     function showRecvFile(name, size, totalChunks) {
         const tChunks = totalChunks || Math.max(1, Math.ceil((size || 0) / CHUNK_SIZE));
@@ -579,47 +610,6 @@
         state.uploadNext();
     }
 
-            xhr.onerror = () => {
-                currentUploadXhr = null;
-                if (!state.cancelled) handleChunkError();
-            };
-
-            xhr.onabort = () => {
-                currentUploadXhr = null;
-                hideUploadProgress();
-                $("syncIndicator").textContent = "[ĐÃ HỦY]";
-                showToast("[ĐÃ HỦY TẢI LÊN]");
-            };
-
-            xhr.open("POST", `/${slug}-s/chunk?conn=${cid}`);
-            xhr.setRequestHeader("X-Session-ID", state.sessionId);
-            xhr.setRequestHeader("X-File-Name", encodeURIComponent(file.name));
-            xhr.setRequestHeader("X-File-Size", file.size.toString());
-            xhr.setRequestHeader("X-Chunk-Index", idx.toString());
-            xhr.setRequestHeader("X-Total-Chunks", state.totalChunks.toString());
-            xhr.setRequestHeader("X-Chunk-Size", chunkBlob.size.toString());
-            xhr.send(chunkBlob);
-        };
-
-        function handleChunkError() {
-            if (state.cancelled) return;
-            if (state.retryCount < 3) {
-                state.retryCount++;
-                const delay = Math.pow(2, state.retryCount - 1) * 1000;
-                $("uploadEta").textContent = `Thử lại sau ${delay / 1000}s...`;
-                setTimeout(() => {
-                    if (!state.cancelled) state.uploadNext();
-                }, delay);
-            } else {
-                hideUploadProgress();
-                $("syncIndicator").textContent = "[LỖI MẠNG]";
-                showToast("[LỖI NẠP CHUNK - ĐÃ THỬ LẠI 3 LẦN]");
-            }
-        }
-
-        state.uploadNext();
-    }
-
     function updateHomeQuickLinks(s) {
         const tx = $("quickTxLink"), rx = $("quickRxLink");
         if (tx) { tx.href = `/${s}-s`; tx.textContent = `/${s}-s (TX)`; }
@@ -775,6 +765,7 @@
         }
 
         // Bật Bảng điều khiển tiến trình nhận (RX Download Dashboard)
+        isDownloadingRx = true;
         $("recvFileReadyCard").style.display = "none";
         $("recvFileProgressCard").style.display = "flex";
         $("recvProgressFileName").textContent = fileName;
@@ -850,11 +841,13 @@
             renderBatchGrid("rxBatchContainer", totalChunks, totalChunks, "downloading");
 
             setTimeout(() => {
+                isDownloadingRx = false;
                 $("recvFileProgressCard").style.display = "none";
                 showRecvEmpty();
-            }, 2000);
+            }, 1800);
 
         } catch (err) {
+            isDownloadingRx = false;
             if (writable) {
                 try { await writable.abort(); } catch (_) {}
             }
@@ -870,6 +863,7 @@
     };
 
     $("btnCancelDownload").onclick = () => {
+        isDownloadingRx = false;
         if (recvDownloadController) {
             recvDownloadController.abort();
             recvDownloadController = null;

@@ -6,12 +6,21 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 )
+
+// formatContentDisposition tạo header Content-Disposition chuẩn RFC 5987 cho cả ASCII và UTF-8
+func formatContentDisposition(rawName string) string {
+	base := filepath.Base(rawName)
+	safeQuotes := strings.ReplaceAll(base, `"`, `_`)
+	encoded := url.PathEscape(base)
+	return fmt.Sprintf("attachment; filename=\"%s\"; filename*=UTF-8''%s", safeQuotes, encoded)
+}
 
 // isCLI xác định client là công cụ dòng lệnh (curl, wget, PowerShell) hay Trình duyệt
 func isCLI(r *http.Request) bool {
@@ -298,7 +307,7 @@ func handleReceiver(w http.ResponseWriter, r *http.Request) {
 	case PayloadFile:
 		// Trả về File nhị phân kèm Content-Disposition để curl -sLJO tự nhận đúng tên file
 		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filepath.Base(slot.FileName)))
+		w.Header().Set("Content-Disposition", formatContentDisposition(slot.FileName))
 		w.Header().Set("Content-Length", fmt.Sprintf("%d", slot.FileSize))
 		w.Header().Set("X-File-Size", fmt.Sprintf("%d", slot.FileSize))
 		w.Header().Set("X-Total-Chunks", "1")
@@ -338,7 +347,7 @@ func handleReceiver(w http.ResponseWriter, r *http.Request) {
 		room.BroadcastSSE("rx_connected", "")
 
 		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filepath.Base(sess.FileName)))
+		w.Header().Set("Content-Disposition", formatContentDisposition(sess.FileName))
 		if sess.TotalSize > 0 {
 			w.Header().Set("Content-Length", fmt.Sprintf("%d", sess.TotalSize))
 			w.Header().Set("X-File-Size", fmt.Sprintf("%d", sess.TotalSize))
@@ -633,6 +642,9 @@ func handleChunkUpload(w http.ResponseWriter, r *http.Request) {
 
 	sessionID := r.Header.Get("X-Session-ID")
 	fileName := r.Header.Get("X-File-Name")
+	if decoded, decErr := url.PathUnescape(fileName); decErr == nil && decoded != "" {
+		fileName = decoded
+	}
 	if fileName == "" {
 		fileName = "unnamed.bin"
 	}

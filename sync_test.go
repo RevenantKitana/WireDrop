@@ -9,6 +9,8 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -588,5 +590,83 @@ func TestOneBatchChunkedDownload(t *testing.T) {
 	}
 	if !bytes.Equal(allData, chunk0Data) {
 		t.Errorf("Dữ liệu không khớp!")
+	}
+}
+
+func TestHomeAndFrontendJSValidity(t *testing.T) {
+	handler := createHandler()
+	ts := httptest.NewServer(handler)
+	defer ts.Close()
+
+	// 1. Kiểm tra trang chủ GET / (và /#) cho trình duyệt
+	req, _ := http.NewRequest("GET", ts.URL+"/", nil)
+	req.Header.Set("Accept", "text/html,application/xhtml+xml")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("Lỗi truy cập trang chủ /: %v, status: %d", err, resp.StatusCode)
+	}
+	htmlBytes, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	htmlStr := string(htmlBytes)
+	if !strings.Contains(htmlStr, `id="homeView"`) || !strings.Contains(htmlStr, `id="roomInput"`) {
+		t.Errorf("Trang chủ thiếu cấu trúc homeView / roomInput!")
+	}
+
+	// 2. Kiểm tra /app.js và /style.css trả về đúng MIME type và không rỗng
+	jsResp, err := http.Get(ts.URL + "/app.js")
+	if err != nil || jsResp.StatusCode != http.StatusOK {
+		t.Fatalf("Lỗi tải /app.js: %v", err)
+	}
+	jsBytes, _ := io.ReadAll(jsResp.Body)
+	jsResp.Body.Close()
+	if !strings.Contains(jsResp.Header.Get("Content-Type"), "javascript") || len(jsBytes) < 1000 {
+		t.Errorf("Nội dung /app.js không hợp lệ!")
+	}
+
+	// 3. Nếu máy có Node.js: Chạy node --check để đảm bảo 100% không có lỗi cú pháp JS (tránh trắng trang)
+	if nodePath, lookErr := exec.LookPath("node"); lookErr == nil {
+		cmd := exec.Command(nodePath, "--check", "public/app.js")
+		if out, cmdErr := cmd.CombinedOutput(); cmdErr != nil {
+			t.Fatalf("Lỗi cú pháp JavaScript trong public/app.js làm hỏng trang Web:\n%s", string(out))
+		}
+	}
+}
+
+func TestEncodedUTF8FileNameInChunkedUpload(t *testing.T) {
+	handler := createHandler()
+	ts := httptest.NewServer(handler)
+	defer ts.Close()
+
+	slug := "utf8name"
+	origName := "Báo cáo tháng 11 (Final).pdf"
+	encodedName := url.PathEscape(origName)
+	data := []byte("PDF-DUMMY-CONTENT")
+
+	req, _ := http.NewRequest("POST", fmt.Sprintf("%s/%s-s/chunk?conn=tx_utf8", ts.URL, slug), bytes.NewReader(data))
+	req.Header.Set("X-Session-ID", "sess_utf8_1")
+	req.Header.Set("X-File-Name", encodedName)
+	req.Header.Set("X-File-Size", fmt.Sprintf("%d", len(data)))
+	req.Header.Set("X-Chunk-Index", "0")
+	req.Header.Set("X-Total-Chunks", "1")
+	req.Header.Set("X-Chunk-Size", fmt.Sprintf("%d", len(data)))
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("Lỗi upload chunk UTF-8: %v", err)
+	}
+	resp.Body.Close()
+
+	// Kiểm tra snapshot trả về đúng tên file tiếng Việt gốc (đã giải mã URI)
+	snapResp, err := http.Get(fmt.Sprintf("%s/%s/events?role=receiver&conn=rx_utf8&check=1", ts.URL, slug))
+	if err != nil || snapResp.StatusCode != http.StatusOK {
+		t.Fatalf("Lỗi đọc snapshot: %v", err)
+	}
+	var snap map[string]interface{}
+	_ = json.NewDecoder(snapResp.Body).Decode(&snap)
+	snapResp.Body.Close()
+
+	if snap["slot_file_name"] != origName {
+		t.Errorf("Tên file chưa được giải mã đúng! Kỳ vọng %q, nhận %q", origName, snap["slot_file_name"])
 	}
 }
