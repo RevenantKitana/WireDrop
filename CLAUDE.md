@@ -19,17 +19,16 @@ Dự án tuân thủ nghiêm ngặt chuẩn Semantic Versioning:
   * Ví dụ: `changelog/17-v0.5.1-fasthost-ux-hub-link-clean-sample.md`.
 * **Cập nhật Bảng Mục Lục:** Mọi file changelog mới PHẢI được liên kết ngay vào [changelog/README.md](changelog/README.md).
 
-### 1.3. Cấu Trúc Chuẩn Của File Changelog (Chuẩn Keep a Changelog)
-Mỗi file changelog bắt buộc phải có các mục sau:
-1. **Tiêu đề & Phiên bản:** `# WireDrop Changelog - v0.X.Y (<Tên Tính Năng>)`
-2. **Thông tin metadata:** Thời gian phát hành, phạm vi áp dụng.
-3. **Mục tiêu thay đổi (Objective / Context):** Vấn đề cần giải quyết, lý do thay đổi.
-4. **Chi tiết thay đổi:**
-   * `Added`: Thêm mới file, hàm, giao diện, endpoint hoặc công cụ.
-   * `Changed`: Cải tiến logic, refactor, thay đổi cấu trúc dữ liệu.
-   * `Fixed`: Sửa lỗi crash, sửa bug logic, sửa CSS MIME/cache, sửa tương thích OS.
-   * `Security`: Cải tiến bảo mật hoặc an toàn dữ liệu.
-5. **Hướng dẫn kiểm thử (Verification):** Các lệnh chạy thử cụ thể để kiểm tra tính năng.
+### 1.3. Cấu Trúc Chuẩn Của File Changelog (Chuẩn Keep a Changelog Tinh Khiết)
+Mỗi file changelog tuân thủ nghiêm ngặt tinh thần tinh khiết (Pure Technical Changelog) — đúng với tác dụng ghi nhận thay đổi kỹ thuật, triệt tiêu văn mẫu và hình thức không cần thiết:
+* **Tuyệt đối không ghi:** Tác giả, slogan/kim chỉ nam, bài luận phân tích bối cảnh/điểm mù (nội dung này thuộc về `spec/`), kế hoạch tương lai (thuộc về Roadmap), hay báo cáo kiểm thử dài dòng.
+* **Cấu trúc bắt buộc (Chỉ gồm 2 phần ngắn gọn):**
+  1. **Tiêu đề & Ngày:** `# WireDrop v0.X.Y - <Tên Tính Năng>` kèm ngày phát hành (`**Ngày:** YYYY-MM-DD`).
+  2. **Danh mục thay đổi kỹ thuật (Bullet points trực diện):**
+     * `Added`: Thêm mới tính năng, file, endpoint, cờ lệnh, UI element.
+     * `Changed`: Cải tiến logic, refactor, cập nhật cấu trúc dữ liệu.
+     * `Fixed`: Sửa lỗi crash, bug logic, sửa CSS MIME/cache, lỗi tương thích OS.
+     * `Removed`: Gọt tỉa, xóa bỏ tính năng thừa, đóng băng phạm vi.
 
 ### 1.4. Single Source of Truth cho Phiên Bản
 * Hằng số phiên bản duy nhất được định nghĩa trong [main.go](main.go): `const Version = "v0.X.Y"`.
