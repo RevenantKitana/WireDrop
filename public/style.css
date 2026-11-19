@@ -151,9 +151,15 @@ main, #homeView, #senderView, #receiverView {
 }
 
 /* SOẠN THẢO TEXT */
+#editorContainer {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
 #senderTextarea {
     width: 100%;
-    height: 100%;
+    flex: 1;
+    min-height: 140px;
     border: none;
     padding: 16px;
     font: inherit;
@@ -164,6 +170,63 @@ main, #homeView, #senderView, #receiverView {
     background: #fff;
     overflow-y: auto;
     box-sizing: border-box;
+}
+
+/* TX FOOTER: DELIVERED ACK & RECENT 3-TEXT STACK */
+.tx-footer-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 16px;
+    background: #fafafa;
+    border-top: 1px dashed #000;
+    font-size: 11px;
+}
+.delivery-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    background: #000;
+    color: #00ff66;
+    font-weight: bold;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    width: fit-content;
+    border: 1px solid #000;
+    transition: all 0.2s ease;
+}
+.tx-history-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+    white-space: nowrap;
+    padding-top: 2px;
+}
+.tx-history-label {
+    font-weight: bold;
+    color: #444;
+    font-size: 10px;
+}
+.tx-history-list {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+}
+.tx-history-chip {
+    padding: 2px 8px;
+    background: #fff;
+    border: 1px solid #000;
+    cursor: pointer;
+    font-size: 11px;
+    font-family: inherit;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.tx-history-chip:hover {
+    background: #000;
+    color: #fff;
 }
 
 /* KHUNG CHẾ ĐỘ FILE - KẾ THỪA CÙNG KÍCH THƯỚC */

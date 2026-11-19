@@ -308,6 +308,11 @@ func handleReceiver(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		_, _ = w.Write([]byte(textToSend))
 
+		if isCLI(r) && strings.TrimSpace(slot.TextData) != "" {
+			ackData := fmt.Sprintf(`{"by":"cli","action":"read","time":"%s"}`, time.Now().Format("15:04:05"))
+			room.BroadcastSSE("payload_consumed", ackData)
+		}
+
 		if shouldBurn {
 			room.ClearSlot()
 			room.BroadcastSSE("payload_cleared", "")
@@ -332,6 +337,11 @@ func handleReceiver(w http.ResponseWriter, r *http.Request) {
 			if shouldBurn {
 				_ = os.Remove(slot.TempPath)
 			}
+		}
+
+		if isCLI(r) {
+			ackData := fmt.Sprintf(`{"by":"cli","action":"download","time":"%s"}`, time.Now().Format("15:04:05"))
+			room.BroadcastSSE("payload_consumed", ackData)
 		}
 
 		if shouldBurn {
@@ -410,6 +420,13 @@ func handleReceiver(w http.ResponseWriter, r *http.Request) {
 			room.BroadcastSSE("chunk_ack", string(ackData))
 		}
 
+		consumedBy := "web"
+		if isCLI(r) {
+			consumedBy = "cli"
+		}
+		consumedData := fmt.Sprintf(`{"by":"%s","action":"download","time":"%s"}`, consumedBy, time.Now().Format("15:04:05"))
+		room.BroadcastSSE("payload_consumed", consumedData)
+
 		room.ClearSlot()
 		room.BroadcastSSE("payload_cleared", "")
 
@@ -466,6 +483,7 @@ func handleLivePipeStream(w http.ResponseWriter, r *http.Request, room *RoomStat
 				return
 			}
 			flusher.Flush()
+			room.BroadcastSSE("payload_consumed", fmt.Sprintf(`{"by":"cli","action":"pipe_exec","time":"%s"}`, time.Now().Format("15:04:05")))
 		}
 	}
 }
@@ -862,6 +880,30 @@ func handleChunkAbort(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "Session aborted"})
+}
+
+// handleRoomAck nhận phản hồi báo nhận từ Web UI Receiver (SAO CHÉP / TẢI VỀ)
+func handleRoomAck(w http.ResponseWriter, r *http.Request) {
+	slug := strings.ToLower(r.PathValue("room"))
+	slug = strings.TrimSuffix(slug, "-r")
+	slug = strings.TrimSuffix(slug, "-s")
+
+	room, exists := globalRooms.Get(slug)
+	if !exists {
+		http.NotFound(w, r)
+		return
+	}
+
+	action := r.URL.Query().Get("action")
+	if action == "" {
+		action = "copy"
+	}
+
+	ackData := fmt.Sprintf(`{"by":"web","action":"%s","time":"%s"}`, action, time.Now().Format("15:04:05"))
+	room.BroadcastSSE("payload_consumed", ackData)
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
 // handleHealth kiểm tra tình trạng sống của server

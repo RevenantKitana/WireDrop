@@ -61,9 +61,11 @@
                         </div>
                         <div class="guide-col">
                             <strong>[2. THỰC THI LỆNH (RX)]</strong>
-                            <p>Linux / macOS:</p>
+                            <p>Linux / macOS (curl):</p>
                             <code class="rx-cmd" id="homeGuideLinux">curl -sL host/:room-r | sh</code>
-                            <p>Windows PowerShell:</p>
+                            <p style="margin-top: 4px;">Alpine / BusyBox (wget):</p>
+                            <code class="rx-cmd" id="homeGuideAlpine">wget -qO- host/:room-r | sh</code>
+                            <p style="margin-top: 4px;">Windows PowerShell:</p>
                             <code class="rx-cmd" id="homeGuideWin">irm host/:room-r | iex</code>
                         </div>
                         <div class="guide-col">
@@ -95,6 +97,14 @@
                         <textarea id="senderTextarea" spellcheck="false" placeholder="# Nhập lệnh shell, script...
 Write-Host 'Hello from WireDrop' -ForegroundColor Green
 "></textarea>
+                        <!-- TX FOOTER: DELIVERED ACK & RECENT 3-TEXT STACK -->
+                        <div class="tx-footer-bar">
+                            <div id="deliveryBadge" class="delivery-badge" style="display:none;"></div>
+                            <div id="txHistoryContainer" class="tx-history-container" style="display:none;">
+                                <span class="tx-history-label">GẦN ĐÂY:</span>
+                                <div id="txHistoryList" class="tx-history-list"></div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- 2. CHẾ ĐỘ FILE (KẾ THỪA TRỌN VẸN CÙNG FORM) -->
@@ -174,6 +184,7 @@ Write-Host 'Hello from WireDrop' -ForegroundColor Green
                         <span class="rx-title" id="rxBarTitle">LỆNH CHẠY TRÊN MÁY ĐÍCH (RX):</span>
                         <div class="os-tabs">
                             <button class="os-tab active" data-os="linux">LINUX</button>
+                            <button class="os-tab" data-os="alpine">ALPINE</button>
                             <button class="os-tab" data-os="win">WIN</button>
                             <button class="os-tab" data-os="browser">URL</button>
                         </div>

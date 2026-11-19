@@ -4,6 +4,7 @@
 
 **Loại tài liệu:** `APPROVED ARCHITECTURAL SPECIFICATION` (Đặc Tả Kiến Trúc Đã Được Phê Duyệt)  
 **Ngày phê duyệt:** 2026-11-18  
+**Trạng thái:** 🚀 Đã triển khai Pha 1 (`v0.7.0`) / ⏳ **PENDING & ĐÓNG BĂNG** Pha 2 & Pha 3 (Theo Tuyên Bố Đóng Băng Phạm Vi Scope Freeze tại Spec 05)  
 **Quyết định phê duyệt:** Chấp thuận toàn bộ 5/5 khuyến nghị thiết kế (Q1: Pha 1 Turbo HTTP Core cho v0.7.0; Q2: Vi mảnh 256KB với `sync.Pool`; Q3: Tối đa 2 luồng nạp song song gối đầu; Q4: Bậc mảnh theo dung lượng 8MB/16MB/32MB; Q5: Mặc định `--protocol http2` cho FastHost Tunnel).  
 **Phiên bản áp dụng:** `v0.7.0`  
 **Ràng buộc bất biến:** **100% Go Standard Library (Zero-Dependency)** • **0 Byte Ghi Đĩa Server** • **Giữ nguyên tương thích CLI (`curl`, `irm`)**

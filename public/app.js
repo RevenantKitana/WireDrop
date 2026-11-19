@@ -86,6 +86,9 @@
 
         if (os === "linux") {
             $("cheatCode").textContent = isFile ? `curl -sLJO ${urlRx}` : `curl -sL ${urlRx} | sh`;
+        } else if (os === "alpine") {
+            const fname = ($("activeFileName").textContent && $("activeFileName").textContent !== "-") ? $("activeFileName").textContent : "file.bin";
+            $("cheatCode").textContent = isFile ? `wget -O ${fname} ${urlRx}` : `wget -qO- ${urlRx} | sh`;
         } else if (os === "win") {
             const fname = ($("activeFileName").textContent && $("activeFileName").textContent !== "-") ? $("activeFileName").textContent : "file.bin";
             $("cheatCode").textContent = isFile ? `iwr ${urlRx} -OutFile ${fname}` : `irm ${urlRx} | iex`;
@@ -102,6 +105,47 @@
                 tipEl.style.display = "none";
             }
         }
+    }
+
+    function saveTxHistory(txt) {
+        txt = (txt || "").trim();
+        if (!txt) return;
+        try {
+            let hist = JSON.parse(localStorage.getItem("wd_tx_history") || "[]");
+            hist = hist.filter(item => item !== txt);
+            hist.unshift(txt);
+            if (hist.length > 3) hist = hist.slice(0, 3);
+            localStorage.setItem("wd_tx_history", JSON.stringify(hist));
+            renderTxHistory();
+        } catch (_) {}
+    }
+
+    function renderTxHistory() {
+        const container = $("txHistoryContainer");
+        const list = $("txHistoryList");
+        if (!container || !list) return;
+        try {
+            const hist = JSON.parse(localStorage.getItem("wd_tx_history") || "[]");
+            if (!hist || hist.length === 0) {
+                container.style.display = "none";
+                return;
+            }
+            container.style.display = "flex";
+            list.innerHTML = "";
+            hist.forEach((item, idx) => {
+                const chip = document.createElement("button");
+                chip.className = "tx-history-chip";
+                chip.type = "button";
+                const displayTitle = item.replace(/[\r\n]+/g, " ");
+                chip.textContent = `#${idx + 1}: ${displayTitle.length > 25 ? displayTitle.slice(0, 25) + '…' : displayTitle}`;
+                chip.title = item;
+                chip.onclick = () => {
+                    $("senderTextarea").value = item;
+                    autoSave();
+                };
+                list.appendChild(chip);
+            });
+        } catch (_) {}
     }
 
     function showLockout(msg) {
@@ -291,6 +335,21 @@
                     showToast("[DỮ LIỆU ĐÃ RÚT KHỎI DÂY]");
                 }
             }
+        });
+        sse.addEventListener("payload_consumed", e => {
+            try {
+                const d = JSON.parse(e.data);
+                if (isSender) {
+                    const badge = $("deliveryBadge");
+                    if (badge) {
+                        const byStr = d.by === "cli" ? "RX CLI (curl/wget)" : `RX Web (${d.action})`;
+                        badge.textContent = `✓ ĐÃ ĐẾN MÁY ĐÍCH [${byStr} lúc ${d.time}]`;
+                        badge.style.display = "inline-block";
+                        badge.className = "delivery-badge success";
+                        showToast(`[✓ DỮ LIỆU ĐÃ ĐẾN MÁY ĐÍCH - ${byStr}]`);
+                    }
+                }
+            } catch (_) {}
         });
         sse.onerror = () => {
             fetch(`/${slug}/events?role=${role}&conn=${cid}&check=1`).then(r => {
@@ -527,6 +586,15 @@
                 body: $("senderTextarea").value
             }).then(r => {
                 $("syncIndicator").textContent = r.ok ? "[ĐÃ LƯU ✓]" : (r.status === 409 ? "[BỊ KHÓA]" : "[LỖI]");
+                if (r.ok) {
+                    const badge = $("deliveryBadge");
+                    if (badge && $("senderTextarea").value.trim()) {
+                        badge.textContent = "[ĐANG CHỜ RX...]";
+                        badge.className = "delivery-badge";
+                        badge.style.display = "inline-block";
+                    }
+                    saveTxHistory($("senderTextarea").value);
+                }
                 if (r.status === 409) showLockout("TX đang bị chiếm giữ. Bấm [THỬ KẾT NỐI LẠI] để cắm lại dây!");
             }).catch(() => $("syncIndicator").textContent = "[MẤT MẠNG]")
               .finally(() => setTimeout(() => typing = false, 300));
@@ -748,6 +816,7 @@
         const urlRx = `${location.origin}/${s}-r`;
         const gtx = $("homeGuideTx"); if (gtx) gtx.textContent = `cat script.sh | wiredrop ${s}`;
         const gl = $("homeGuideLinux"); if (gl) gl.textContent = `curl -sL ${urlRx} | sh`;
+        const ga = $("homeGuideAlpine"); if (ga) ga.textContent = `wget -qO- ${urlRx} | sh`;
         const gw = $("homeGuideWin"); if (gw) gw.textContent = `irm ${urlRx} | iex`;
         const gf = $("homeGuideFile"); if (gf) gf.textContent = `curl -sLJO ${urlRx}`;
     }
@@ -781,12 +850,16 @@
         $("senderView").style.display = isSender ? "flex" : "none";
         $("receiverView").style.display = isSender ? "none" : "flex";
 
+        if (isSender) {
+            renderTxHistory();
+        }
+
         if (isSender && (location.search.includes("mode=file") || location.hash === "#file")) {
             showFileDropzone();
         }
 
         const tabParam = new URLSearchParams(location.search).get("tab");
-        if (tabParam && ["linux", "win", "browser"].includes(tabParam)) {
+        if (tabParam && ["linux", "alpine", "win", "browser"].includes(tabParam)) {
             os = tabParam;
             document.querySelectorAll(".os-tab").forEach(t => t.classList.toggle("active", t.dataset.os === os));
         }
@@ -878,7 +951,10 @@
     dz.ondrop = e => { e.preventDefault(); dz.classList.remove("dragover"); if (e.dataTransfer.files[0]) uploadFile(e.dataTransfer.files[0]); };
 
     $("btnCopyCheat").onclick = () => copyText($("cheatCode").textContent);
-    $("btnCopyRecvText").onclick = () => copyText($("recvTextDisplay").querySelector("code").textContent);
+    $("btnCopyRecvText").onclick = () => {
+        copyText($("recvTextDisplay").querySelector("code").textContent);
+        fetch(`/${slug}/ack?action=copy`, { method: "POST" }).catch(() => {});
+    };
 
     const btnShorten = $("btnShorten");
     const shortenTooltip = $("shortenTooltip");
@@ -1037,6 +1113,7 @@
     }
 
     $("btnDownloadFile").onclick = async () => {
+        fetch(`/${slug}/ack?action=download`, { method: "POST" }).catch(() => {});
         const fileInfo = recvCurrentFile || { name: $("recvFileName").textContent, size: 0, totalChunks: 1 };
         const fileName = fileInfo.name && fileInfo.name !== "-" ? fileInfo.name : "download.bin";
         const totalSize = fileInfo.size || 0;

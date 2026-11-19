@@ -6,7 +6,7 @@
 **Ngày khởi tạo:** 2026-11-19  
 **Ngày phê duyệt:** 2026-11-19  
 **Quyết định phê duyệt:** Chấp thuận toàn bộ 6/6 quyết định thiết kế (Q1: Shortlink Opt-in Only; Q2: Cú pháp siêu ngắn wiredrop <room>; Q3: Zero-Install Cheat Sheet cho máy khách xa lạ; Q4: Phím tắt r qua /i; Q5: Tự động nhận diện UNIX Pipe; Q6: Nút Tạo Shortlink On-Demand trên Web).  
-**Trạng thái:** Đã Phê Duyệt - Đang Triển Khai (Approved & In Progress)  
+**Trạng thái:** 🚀 IMPLEMENTED (Đã Triển Khai Hoàn Tất & Kiểm Thử trong v0.8.0)  
 **Tác giả:** Đội ngũ Kiến trúc WireDrop  
 **Ràng buộc bất biến:**  
 * **100% Go Standard Library (Zero-Dependency)** — Tuyệt đối không thêm thư viện ngoài.  

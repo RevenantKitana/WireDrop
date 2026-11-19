@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-const Version = "v0.8.1"
+const Version = "v0.8.2"
 const defaultSlugChars = "abcdefghijklmnopqrstuvwxyz0123456789"
 
 func randomSlug(n int) string {
@@ -182,6 +182,7 @@ func createHandler() http.Handler {
 	// 2. Health & API
 	mux.HandleFunc("GET /health", handleHealth)
 	mux.HandleFunc("POST /api/shorten", handleAPIShorten)
+	mux.HandleFunc("POST /{room}/ack", handleRoomAck)
 
 	// 3. Quản lý trạng thái và SSE
 	mux.HandleFunc("GET /{room}/events", handleRoomEvents)
@@ -254,6 +255,12 @@ func main() {
 			// Chạy server thông thường với flag
 			runDedicatedServer(args[1:])
 			return
+		case "install", "--install":
+			runInstallCommand()
+			return
+		case "uninstall", "--uninstall":
+			runUninstallCommand()
+			return
 		case "-h", "--help", "-help":
 			printTerminalPipeHelp()
 			return
@@ -294,4 +301,75 @@ func runDedicatedServer(args []string) {
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("Server sập: %v", err)
 	}
+}
+
+// runInstallCommand cài đặt wiredrop vào thư mục User PATH toàn cục
+func runInstallCommand() {
+	exePath, err := os.Executable()
+	if err != nil {
+		log.Fatalf("[X] Không thể xác định đường dẫn file thực thi: %v", err)
+	}
+	exePath, _ = filepath.EvalSymlinks(exePath)
+
+	var targetDir, targetExe string
+	isWindows := os.Getenv("OS") == "Windows_NT" || strings.Contains(strings.ToLower(os.Getenv("OS")), "windows") || filepath.Ext(exePath) == ".exe"
+
+	if isWindows {
+		localApp := os.Getenv("LOCALAPPDATA")
+		if localApp == "" {
+			localApp = filepath.Join(os.Getenv("USERPROFILE"), "AppData", "Local")
+		}
+		targetDir = filepath.Join(localApp, "Microsoft", "WindowsApps")
+		targetExe = filepath.Join(targetDir, "wiredrop.exe")
+	} else {
+		targetDir = "/usr/local/bin"
+		targetExe = filepath.Join(targetDir, "wiredrop")
+	}
+
+	_ = os.MkdirAll(targetDir, 0755)
+
+	srcData, err := os.ReadFile(exePath)
+	if err != nil {
+		log.Fatalf("[X] Không thể đọc file nguồn (%s): %v", exePath, err)
+	}
+
+	if err := os.WriteFile(targetExe, srcData, 0755); err != nil {
+		log.Fatalf("[X] Lỗi cài đặt vào %s: %v\n(Gợi ý: Kiểm tra xem có tiến trình wiredrop nào đang chạy chiếm file không)", targetExe, err)
+	}
+
+	fmt.Println("================================================================")
+	fmt.Printf("  ✓ ĐÃ CÀI ĐẶT WIREDROP TOÀN CỤC THÀNH CÔNG (%s)\n", Version)
+	fmt.Println("================================================================")
+	fmt.Printf("  • File thực thi: %s\n", targetExe)
+	fmt.Println("  • Giờ đây bạn có thể mở bất kỳ cửa sổ CMD hoặc PowerShell nào")
+	fmt.Println("    ở bất kỳ thư mục nào và gõ trực tiếp:")
+	fmt.Println("      wiredrop <room_id>         (Mở đầu phát TX)")
+	fmt.Println("      wiredrop <room_id> -r      (Mở đầu nhận RX)")
+	fmt.Println("================================================================")
+}
+
+// runUninstallCommand gỡ bỏ wiredrop khỏi thư mục toàn cục
+func runUninstallCommand() {
+	var targetExe string
+	isWindows := os.Getenv("OS") == "Windows_NT" || strings.Contains(strings.ToLower(os.Getenv("OS")), "windows")
+
+	if isWindows {
+		localApp := os.Getenv("LOCALAPPDATA")
+		if localApp == "" {
+			localApp = filepath.Join(os.Getenv("USERPROFILE"), "AppData", "Local")
+		}
+		targetExe = filepath.Join(localApp, "Microsoft", "WindowsApps", "wiredrop.exe")
+	} else {
+		targetExe = "/usr/local/bin/wiredrop"
+	}
+
+	if err := os.Remove(targetExe); err != nil {
+		if os.IsNotExist(err) {
+			fmt.Printf("[i] Không tìm thấy bản cài đặt tại: %s\n", targetExe)
+			return
+		}
+		log.Fatalf("[X] Lỗi gỡ cài đặt: %v", err)
+	}
+
+	fmt.Printf("✓ Đã gỡ bỏ WireDrop thành công khỏi: %s\n", targetExe)
 }

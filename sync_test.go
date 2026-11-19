@@ -1232,3 +1232,81 @@ func TestSenderClearSlotCommand(t *testing.T) {
 	}
 }
 
+func TestDeliveredAckAndCliConsumption(t *testing.T) {
+	handler := createHandler()
+	ts := httptest.NewServer(handler)
+	defer ts.Close()
+
+	slug := "acktest"
+
+	// 1. Kết nối SSE để theo dõi sự kiện payload_consumed
+	sseURL := fmt.Sprintf("%s/%s/events?role=sender&cid=test_tx", ts.URL, slug)
+	sseReq, _ := http.NewRequest(http.MethodGet, sseURL, nil)
+	sseReq.Header.Set("Accept", "text/event-stream")
+
+	sseResp, err := http.DefaultClient.Do(sseReq)
+	if err != nil || sseResp.StatusCode != http.StatusOK {
+		t.Fatalf("Không thể kết nối SSE: %v", err)
+	}
+	defer sseResp.Body.Close()
+
+	eventsChan := make(chan string, 10)
+	go func() {
+		reader := bufio.NewReader(sseResp.Body)
+		for {
+			line, errRead := reader.ReadString('\n')
+			if errRead != nil {
+				return
+			}
+			if strings.HasPrefix(line, "event:") {
+				evtName := strings.TrimSpace(strings.TrimPrefix(line, "event:"))
+				eventsChan <- evtName
+			}
+		}
+	}()
+
+	// 2. TX nạp text
+	postResp, err := http.Post(fmt.Sprintf("%s/%s-s", ts.URL, slug), "text/plain", strings.NewReader("hello from tx"))
+	if err != nil || postResp.StatusCode != http.StatusOK {
+		t.Fatalf("Lỗi nạp text: %v", err)
+	}
+	postResp.Body.Close()
+
+	// 3. Test Web Ack: POST /{room}/ack?action=copy
+	ackResp, err := http.Post(fmt.Sprintf("%s/%s/ack?action=copy", ts.URL, slug), "application/json", nil)
+	if err != nil || ackResp.StatusCode != http.StatusOK {
+		t.Fatalf("Lỗi gọi /ack: %v", err)
+	}
+	ackResp.Body.Close()
+
+	// 4. Test CLI consumption: GET /{room}-r với CLI User-Agent
+	cliReq, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/%s-r", ts.URL, slug), nil)
+	cliReq.Header.Set("User-Agent", "curl/8.5.0")
+	cliResp, err := http.DefaultClient.Do(cliReq)
+	if err != nil || cliResp.StatusCode != http.StatusOK {
+		t.Fatalf("Lỗi đọc CLI: %v", err)
+	}
+	cliResp.Body.Close()
+
+	// 5. Kiểm tra xem có nhận được 2 sự kiện payload_consumed không
+	consumedCount := 0
+	timeout := time.After(1 * time.Second)
+	for {
+		select {
+		case evt := <-eventsChan:
+			if evt == "payload_consumed" {
+				consumedCount++
+				if consumedCount >= 2 {
+					return // Thành công!
+				}
+			}
+		case <-timeout:
+			if consumedCount < 2 {
+				t.Errorf("Kỳ vọng nhận 2 sự kiện payload_consumed, chỉ nhận được %d", consumedCount)
+			}
+			return
+		}
+	}
+}
+
+

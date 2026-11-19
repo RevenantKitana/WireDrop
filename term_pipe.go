@@ -135,6 +135,8 @@ func printTerminalPipeHelp() {
 	fmt.Println("  wiredrop <room_id> -r [flags]      Mở luồng Terminal Receiver (Đầu Nhận RX)")
 	fmt.Println("  wiredrop host [flags]              Khởi chạy Cloudflare FastHost Tunnel")
 	fmt.Println("  wiredrop server [flags]            Khởi chạy HTTP Server thuần túy")
+	fmt.Println("  wiredrop install                   Cài đặt wiredrop vào PATH toàn cục hệ thống")
+	fmt.Println("  wiredrop uninstall                 Gỡ bỏ wiredrop khỏi PATH toàn cục")
 	fmt.Println()
 	fmt.Println("CÁC CỜ HỖ TRỢ CHO TERMINAL PIPE:")
 	fmt.Println("  -r, --rx           Chế độ Nhận (Receiver): Mở luồng lắng nghe stdout")
@@ -290,7 +292,7 @@ func runTerminalSenderREPL(serverURL, slug string, useShortlink bool) {
 		shortR, _ := registerShortlinkWithGateway("https://s.wd.io.vn", slug, serverURL)
 		if shortR != "" {
 			displayRxWeb = shortR
-			displayRxCLI = fmt.Sprintf("curl -sN %s", shortR)
+			displayRxCLI = fmt.Sprintf("curl -sL %s | sh", shortR)
 			displayRxWin = fmt.Sprintf("irm %s | iex", shortR)
 			displayRxFile = fmt.Sprintf("curl -sLJO %s", shortR)
 		}
@@ -298,7 +300,7 @@ func runTerminalSenderREPL(serverURL, slug string, useShortlink bool) {
 
 	if displayRxWeb == "" {
 		displayRxWeb = urlDirectRx
-		displayRxCLI = fmt.Sprintf("curl -sN %s", urlDirectRx)
+		displayRxCLI = fmt.Sprintf("curl -sL %s | sh", urlDirectRx)
 		displayRxWin = fmt.Sprintf("irm %s | iex", urlDirectRx)
 		displayRxFile = fmt.Sprintf("curl -sLJO %s", urlDirectRx)
 	}
@@ -310,8 +312,8 @@ func runTerminalSenderREPL(serverURL, slug string, useShortlink bool) {
 	fmt.Println("  Gửi 1 trong các câu lệnh dưới đây cho Máy Nhận (0 CẦN CÀI ĐẶT):")
 	fmt.Println()
 	fmt.Printf("  📱 Web / Điện thoại:      %s\n", displayRxWeb)
-	fmt.Printf("  🐧 Linux / macOS:        %s\n", displayRxCLI)
-	fmt.Printf("                           (Chạy script: curl -sL %s | sh)\n", displayRxWeb)
+	fmt.Printf("  🐧 Linux / macOS (curl): %s\n", displayRxCLI)
+	fmt.Printf("  🏔️ Alpine Linux (wget):  wget -qO- %s | sh\n", displayRxWeb)
 	fmt.Printf("  🪟 Windows PowerShell:   %s\n", displayRxWin)
 	fmt.Printf("  📦 Tải File nhị phân:    %s\n", displayRxFile)
 	fmt.Println()
@@ -334,6 +336,46 @@ func runTerminalSenderREPL(serverURL, slug string, useShortlink bool) {
 		<-sigChan
 		fmt.Println("\n[*] Đã đóng phiên Terminal Pipe. Tạm biệt!")
 		os.Exit(0)
+	}()
+
+	// Lắng nghe SSE từ máy chủ để nhận phản hồi Delivered ACK từ máy đích
+	go func() {
+		eventsURL := fmt.Sprintf("%s/%s/events?role=sender&cid=term_tx_%d", serverURL, slug, time.Now().UnixNano())
+		sseClient := &http.Client{Timeout: 0}
+		for {
+			req, err := http.NewRequest(http.MethodGet, eventsURL, nil)
+			if err != nil {
+				time.Sleep(3 * time.Second)
+				continue
+			}
+			req.Header.Set("Accept", "text/event-stream")
+			resp, err := sseClient.Do(req)
+			if err != nil {
+				time.Sleep(3 * time.Second)
+				continue
+			}
+			reader := bufio.NewReader(resp.Body)
+			for {
+				line, err := reader.ReadString('\n')
+				if err != nil {
+					break
+				}
+				line = strings.TrimSpace(line)
+				if strings.HasPrefix(line, "data:") {
+					dataStr := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+					var evt map[string]interface{}
+					if json.Unmarshal([]byte(dataStr), &evt) == nil {
+						if by, ok := evt["by"].(string); ok {
+							tStr, _ := evt["time"].(string)
+							act, _ := evt["action"].(string)
+							fmt.Printf("\n[✓] Máy đích (%s - %s) đã nhận dữ liệu lúc %s!\n[%s-s:TX]> ", by, act, tStr, slug)
+						}
+					}
+				}
+			}
+			_ = resp.Body.Close()
+			time.Sleep(2 * time.Second)
+		}
 	}()
 
 	for {
