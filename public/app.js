@@ -72,10 +72,15 @@
         }
     }
 
+    let activeShortURL = null;
+
     function updateCheatCode() {
         if (isHome) return;
-        const urlRx = `${location.origin}/${slug}-r`;
-        const urlTx = `${location.origin}/${slug}-s`;
+        let urlRx = `${location.origin}/${slug}-r`;
+        let urlTx = `${location.origin}/${slug}-s`;
+        if (activeShortURL) {
+            urlRx = activeShortURL;
+        }
         const isFile = $("btnModeFile").classList.contains("active");
         const titleEl = $("rxBarTitle");
 
@@ -877,6 +882,36 @@
 
     $("btnCopyCheat").onclick = () => copyText($("cheatCode").textContent);
     $("btnCopyRecvText").onclick = () => copyText($("recvTextDisplay").querySelector("code").textContent);
+
+    const btnShorten = $("btnShorten");
+    if (btnShorten) {
+        btnShorten.onclick = async () => {
+            btnShorten.textContent = "ĐANG TẠO...";
+            btnShorten.disabled = true;
+            try {
+                const res = await fetch("/api/shorten", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ slug: slug })
+                });
+                const data = await res.json();
+                if (data && data.short_r) {
+                    activeShortURL = data.short_r;
+                    updateCheatCode();
+                    btnShorten.textContent = "✓ ĐÃ RÚT GỌN";
+                    showToast("[ĐÃ TẠO SHORTLINK s.wd.io.vn]");
+                } else {
+                    btnShorten.textContent = "⚡ RÚT GỌN";
+                    btnShorten.disabled = false;
+                    showToast("[KHÔNG THỂ TẠO SHORTLINK]");
+                }
+            } catch (e) {
+                btnShorten.textContent = "⚡ RÚT GỌN";
+                btnShorten.disabled = false;
+                showToast("[LỖI KẾT NỐI SHORTLINK GATEWAY]");
+            }
+        };
+    }
 
     // Chế độ 1: Tải trực tiếp bằng Trình quản lý của Hệ điều hành (Native OS Download)
     // Dành cho Mobile (iOS Safari / Android Chrome) hoặc khi không có File System Access API

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -1100,3 +1101,134 @@ func TestShortlinkGatewayRegistration(t *testing.T) {
 		t.Errorf("Kỳ vọng trả về rỗng khi gateway='none', nhận shortR=%q, shortS=%q", noneR, noneS)
 	}
 }
+
+func TestTerminalPipeArgsParsing(t *testing.T) {
+	// Case 1: 'wiredrop 88' -> TX, slug 88
+	opt1 := parseTerminalPipeArgs([]string{"88"})
+	if opt1.Slug != "88" || opt1.IsReceiver != false || opt1.UseShortlink != false || opt1.OpenWeb != false {
+		t.Errorf("Case 1 lỗi: %+v", opt1)
+	}
+
+	// Case 2: 'wiredrop 88 -r' -> RX, slug 88
+	opt2 := parseTerminalPipeArgs([]string{"88", "-r"})
+	if opt2.Slug != "88" || opt2.IsReceiver != true {
+		t.Errorf("Case 2 lỗi: %+v", opt2)
+	}
+
+	// Case 3: 'wiredrop 88 -s' -> TX, slug 88, shortlink true
+	opt3 := parseTerminalPipeArgs([]string{"88", "-s"})
+	if opt3.Slug != "88" || opt3.UseShortlink != true {
+		t.Errorf("Case 3 lỗi: %+v", opt3)
+	}
+
+	// Case 4: 'wiredrop 88 -w' -> Web browser true
+	opt4 := parseTerminalPipeArgs([]string{"88", "-w"})
+	if opt4.Slug != "88" || opt4.OpenWeb != true {
+		t.Errorf("Case 4 lỗi: %+v", opt4)
+	}
+
+	// Case 5: 'wiredrop open testroom --rx --short'
+	opt5 := parseTerminalPipeArgs([]string{"open", "testroom", "--rx", "--short"})
+	if opt5.Slug != "testroom" || opt5.IsReceiver != true || opt5.UseShortlink != true {
+		t.Errorf("Case 5 lỗi: %+v", opt5)
+	}
+
+	// Case 6: 'wiredrop 99-r' -> Tự nhận diện hậu tố -r
+	opt6 := parseTerminalPipeArgs([]string{"99-r"})
+	if opt6.Slug != "99" || opt6.IsReceiver != true {
+		t.Errorf("Case 6 lỗi: %+v", opt6)
+	}
+
+	// Case 7: 'wiredrop 99-s' -> Tự nhận diện hậu tố -s
+	opt7 := parseTerminalPipeArgs([]string{"99-s"})
+	if opt7.Slug != "99" || opt7.IsReceiver != false {
+		t.Errorf("Case 7 lỗi: %+v", opt7)
+	}
+}
+
+func TestAPIShortenEndpoint(t *testing.T) {
+	// 1. Mock Gateway
+	mockGateway := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		slug := body["slug"].(string)
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "ok",
+			"slug":    slug,
+			"short_r": fmt.Sprintf("https://s.wd.io.vn/%s-r", slug),
+			"short_s": fmt.Sprintf("https://s.wd.io.vn/%s-s", slug),
+		})
+	}))
+	defer mockGateway.Close()
+
+	os.Setenv("SHORTLINK_GATEWAY", mockGateway.URL)
+	defer os.Unsetenv("SHORTLINK_GATEWAY")
+
+	server := httptest.NewServer(createHandler())
+	defer server.Close()
+
+	reqBody := `{"slug":"room77","destination":"` + server.URL + `"}`
+	resp, err := http.Post(server.URL+"/api/shorten", "application/json", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("Lỗi gọi /api/shorten: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Kỳ vọng HTTP 200, nhận %d", resp.StatusCode)
+	}
+
+	var res struct {
+		Status   string `json:"status"`
+		Slug     string `json:"slug"`
+		ShortR   string `json:"short_r"`
+		Fallback bool   `json:"fallback"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		t.Fatalf("Lỗi decode JSON: %v", err)
+	}
+
+	if res.Status != "ok" || res.ShortR != "https://s.wd.io.vn/room77-r" || res.Fallback != false {
+		t.Errorf("Kết quả /api/shorten không khớp: %+v", res)
+	}
+}
+
+func TestSenderClearSlotCommand(t *testing.T) {
+	server := httptest.NewServer(createHandler())
+	defer server.Close()
+
+	slug := "cleartest"
+	// 1. Nạp text vào phòng
+	postResp, err := http.Post(fmt.Sprintf("%s/%s-s", server.URL, slug), "text/plain", strings.NewReader("sample script data"))
+	if err != nil || postResp.StatusCode != http.StatusOK {
+		t.Fatalf("Lỗi nạp text: %v", err)
+	}
+	postResp.Body.Close()
+
+	// 2. Gửi tín hiệu clear
+	clearResp, err := http.Post(fmt.Sprintf("%s/%s-s?clear=1", server.URL, slug), "text/plain", nil)
+	if err != nil || clearResp.StatusCode != http.StatusOK {
+		t.Fatalf("Lỗi gửi clear: %v", err)
+	}
+	body, _ := io.ReadAll(clearResp.Body)
+	clearResp.Body.Close()
+
+	if !strings.Contains(string(body), "CLEARED") {
+		t.Errorf("Kỳ vọng trả về CLEARED, nhận %q", string(body))
+	}
+
+	// 3. Đọc từ RX kiểm tra phòng đã rỗng
+	rxResp, err := http.Get(fmt.Sprintf("%s/%s-r", server.URL, slug))
+	if err != nil || rxResp.StatusCode != http.StatusOK {
+		t.Fatalf("Lỗi đọc RX: %v", err)
+	}
+	rxBody, _ := io.ReadAll(rxResp.Body)
+	rxResp.Body.Close()
+
+	if !strings.Contains(string(rxBody), "(empty)") {
+		t.Errorf("Phòng chưa rỗng sau khi clear: %q", string(rxBody))
+	}
+}
+

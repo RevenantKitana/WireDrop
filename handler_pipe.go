@@ -95,6 +95,15 @@ func handleSender(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Kiểm tra nếu là tín hiệu xóa sạch dữ liệu phòng (clear)
+		if r.URL.Query().Get("clear") == "1" {
+			room.ClearSlot()
+			room.BroadcastSSE("payload_cleared", "")
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			_, _ = w.Write([]byte("CLEARED\n"))
+			return
+		}
+
 		// Kiểm tra nếu là Live Command đẩy sang Live Pipe
 		if r.URL.Query().Get("live") == "1" || r.Header.Get("X-Live") == "1" {
 			r.Body = http.MaxBytesReader(w, r.Body, 1024*1024)
@@ -899,3 +908,66 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	_, _ = w.Write([]byte("OK\n"))
 }
+
+// handleAPIShorten phục vụ yêu cầu tạo shortlink tuyển chọn theo yêu cầu (/api/shorten)
+func handleAPIShorten(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var payload struct {
+		Slug        string `json:"slug"`
+		Room        string `json:"room"`
+		Destination string `json:"destination"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&payload)
+
+	slug := payload.Slug
+	if slug == "" {
+		slug = payload.Room
+	}
+	if slug == "" {
+		slug = randomSlug(4)
+	}
+	slug = strings.TrimSuffix(slug, "-s")
+	slug = strings.TrimSuffix(slug, "-r")
+
+	destination := payload.Destination
+	if destination == "" {
+		scheme := "http"
+		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+			scheme = "https"
+		}
+		destination = scheme + "://" + r.Host
+	}
+
+	gateway := os.Getenv("SHORTLINK_GATEWAY")
+	if gateway == "" {
+		gateway = "https://s.wd.io.vn"
+	}
+
+	shortR, shortS := registerShortlinkWithGateway(gateway, slug, destination)
+
+	w.Header().Set("Content-Type", "application/json")
+	if shortR == "" {
+		// Fallback nếu gateway không phản hồi
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":   "fallback",
+			"slug":     slug,
+			"short_r":  fmt.Sprintf("%s/%s-r", destination, slug),
+			"short_s":  fmt.Sprintf("%s/%s-s", destination, slug),
+			"fallback": true,
+		})
+		return
+	}
+
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":   "ok",
+		"slug":     slug,
+		"short_r":  shortR,
+		"short_s":  shortS,
+		"fallback": false,
+	})
+}
+

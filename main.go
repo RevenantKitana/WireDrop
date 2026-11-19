@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-const Version = "v0.7.2"
+const Version = "v0.8.0"
 const defaultSlugChars = "abcdefghijklmnopqrstuvwxyz0123456789"
 
 func randomSlug(n int) string {
@@ -179,10 +179,11 @@ func createHandler() http.Handler {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	// 2. Health & Bootstrap Scripts
+	// 2. Health & Bootstrap Scripts & API
 	mux.HandleFunc("GET /health", handleHealth)
 	mux.HandleFunc("GET /i", handleInitScriptLinux)
 	mux.HandleFunc("GET /i.ps1", handleInitScriptWindows)
+	mux.HandleFunc("POST /api/shorten", handleAPIShorten)
 
 	// 3. Quản lý trạng thái và SSE
 	mux.HandleFunc("GET /{room}/events", handleRoomEvents)
@@ -244,17 +245,47 @@ func main() {
 	isPortableExe := strings.Contains(strings.ToLower(exeName), "portable")
 
 	args := os.Args[1:]
-	isHostCmd := len(args) > 0 && (args[0] == "host" || args[0] == "--host")
-	isServerCmd := len(args) > 0 && (args[0] == "server" || args[0] == "--server")
 
-	// Nếu là bản portable (không truyền cờ server) hoặc người dùng chủ động gõ lệnh 'host'
-	if (isPortableExe && !isServerCmd) || isHostCmd {
+	if len(args) > 0 {
+		first := strings.ToLower(args[0])
+		switch first {
+		case "host", "--host":
+			runPortableHost()
+			return
+		case "server", "--server":
+			// Chạy server thông thường với flag
+			runDedicatedServer(args[1:])
+			return
+		case "open":
+			runTerminalPipeCommand(args[1:])
+			return
+		case "-h", "--help", "-help":
+			printTerminalPipeHelp()
+			return
+		default:
+			// Nếu không phải cờ '--port' của server thì coi là lệnh Terminal Pipe
+			// Ví dụ: 'wiredrop 88', 'wiredrop 88 -r', 'wiredrop 88 -s', 'wiredrop -r 88'
+			if !strings.HasPrefix(first, "-port") && !strings.HasPrefix(first, "--port") {
+				runTerminalPipeCommand(args)
+				return
+			}
+		}
+	}
+
+	// Nếu là bản portable (không truyền tham số)
+	if isPortableExe {
 		runPortableHost()
 		return
 	}
 
-	portFlag := flag.String("port", "", "Cong lang nghe HTTP (vi du: 8080)")
-	flag.Parse()
+	runDedicatedServer(args)
+}
+
+// runDedicatedServer chạy HTTP Server nền tảng
+func runDedicatedServer(args []string) {
+	fs := flag.NewFlagSet("server", flag.ExitOnError)
+	portFlag := fs.String("port", "", "Cong lang nghe HTTP (vi du: 8080)")
+	_ = fs.Parse(args)
 
 	port := *portFlag
 	if port == "" {

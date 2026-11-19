@@ -285,12 +285,16 @@ func runPortableHost() {
 				mode = "1"
 				break
 			}
-			if arg == "2" || arg == "--custom" {
+			if arg == "-s" || arg == "-short" || arg == "--short" || arg == "2" {
 				mode = "2"
 				break
 			}
-			if arg == "3" || arg == "--local" {
+			if arg == "3" || arg == "--custom" {
 				mode = "3"
+				break
+			}
+			if arg == "4" || arg == "--local" {
+				mode = "4"
 				break
 			}
 		}
@@ -311,12 +315,13 @@ func runPortableHost() {
 		fmt.Println("================================================================")
 		fmt.Printf("     ⚡ WIREDROP PORTABLE %s - CLOUDFLARE TUNNEL LAUNCHER      \n", Version)
 		fmt.Println("================================================================")
-		fmt.Println(" [1] Domain ngau nhien (Quick Tunnel - Mac dinh)")
-		fmt.Printf(" [2] %s\n", labelCustom)
-		fmt.Println(" [3] Chi chay cuc bo (Local Only - Khong mo Internet)")
+		fmt.Println(" [1] Quick Tunnel Truc Tiep (Mac dinh - Nhanh nhat, Khong trung gian)")
+		fmt.Println(" [2] Quick Tunnel + Rut gon Shortlink (s.wd.io.vn - De go Mobile)")
+		fmt.Printf(" [3] %s\n", labelCustom)
+		fmt.Println(" [4] Chi chay cuc bo (Local Only - Khong mo Internet)")
 		fmt.Println(" [0] Thoat")
 		fmt.Println("----------------------------------------------------------------")
-		fmt.Print("Lua chon cua ban [1/2/3/0] (Mac dinh: 1): ")
+		fmt.Print("Lua chon cua ban [1/2/3/4/0] (Mac dinh: 1): ")
 
 		reader := bufio.NewReader(os.Stdin)
 		input, _ := reader.ReadString('\n')
@@ -331,22 +336,24 @@ func runPortableHost() {
 	case "0":
 		fmt.Println("Tam biet!")
 		return
-	case "3":
+	case "4":
 		// Chạy local thuần túy
 		runLocalServerOnly(cfg.Port)
 		return
-	case "2":
+	case "3":
 		if cfg.CloudflareToken == "" {
 			if !setupCustomDomainEnvInteractive(exeDir, &cfg) {
 				pauseOnExit()
 				return
 			}
 		}
-		runTunnelFlow(exeDir, cfg, false)
+		runTunnelFlow(exeDir, cfg, false, false)
+	case "2":
+		runTunnelFlow(exeDir, cfg, true, true)
 	case "1":
 		fallthrough
 	default:
-		runTunnelFlow(exeDir, cfg, true)
+		runTunnelFlow(exeDir, cfg, true, false)
 	}
 
 	pauseOnExit()
@@ -373,7 +380,7 @@ func runLocalServerOnly(port string) {
 }
 
 // runTunnelFlow khởi động server nội bộ và kết nối Cloudflare Tunnel
-func runTunnelFlow(exeDir string, cfg EnvConfig, isQuick bool) {
+func runTunnelFlow(exeDir string, cfg EnvConfig, isQuick bool, useShortlink bool) {
 	cfBin, err := findOrDownloadCloudflared(exeDir)
 	if err != nil {
 		fmt.Printf("[X] Khong the chuan bi Cloudflare Portable: %v\n", err)
@@ -511,7 +518,7 @@ func runTunnelFlow(exeDir string, cfg EnvConfig, isQuick bool) {
 	randSlug := randomSlug(4)
 
 	var shortURL_R, shortURL_S string
-	if isQuick && cfg.ShortlinkGateway != "" && !strings.EqualFold(cfg.ShortlinkGateway, "none") {
+	if isQuick && useShortlink && cfg.ShortlinkGateway != "" && !strings.EqualFold(cfg.ShortlinkGateway, "none") {
 		fmt.Printf("[*] Dang dang ky Shortlink tren %s...", cfg.ShortlinkGateway)
 		shortURL_R, shortURL_S = registerShortlinkWithGateway(cfg.ShortlinkGateway, randSlug, activeURL)
 		if shortURL_R != "" {
