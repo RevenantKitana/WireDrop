@@ -1,6 +1,6 @@
 # MA TRẬN KIỂM THỬ THỰC CHIẾN 360° & BẢNG NGHIỆM THU TOÀN DIỆN
 # (360° REAL-WORLD ACCEPTANCE TEST MATRIX & CHECKLIST)
-# HỆ THỐNG: WireDrop v0.8.2
+# HỆ THỐNG: WireDrop v0.8.3
 
 **Kim chỉ nam tối thượng:**  
 > **"A giao dịch với B để ít quy trình nhất — Chân lý tối giản để vừa đạt."**
@@ -96,6 +96,18 @@
 - [ ] **Bước 2:** Trên máy ảo VMware Alpine, gõ đúng **12 ký tự**:  
   `wget -qO- s.wd.io.vn/88-r | sh`
 - [ ] **Tiêu chí Đạt:** Gateway chuyển tiếp chính xác về tunnel, lệnh thực thi ngay lập tức. Người gõ trên máy ảo chỉ tốn đúng 12 phím bấm.
+
+### [ ] Case 3.4: Luồng Nghịch (Reverse Flow: Guest VM / Máy Khách TX → Host RX)
+- [ ] **Bước 1:** Tại máy thật (Host), mở Terminal Receiver: `wiredrop 88 -r` (hoặc `wiredrop 88 -r -s` để có shortlink).
+- [ ] **Bước 2:** Quan sát bảng **Cheatsheet Uplink** hiển thị trên terminal máy thật (đầy đủ các lệnh mẫu curl/wget/web đẩy file và stream log về Host).
+- [ ] **Bước 3:** Tại máy ảo Guest (Alpine / Linux), chạy lệnh đẩy file hoặc stream log về Host:
+  - Stream log: `echo "GUEST_BACKUP_COMPLETED" | curl -s -X POST --data-binary @- http://<LAN_IP>:8080/88-s` (hoặc shortlink `https://s.wd.io.vn/88-s`)
+  - Hoặc đẩy file: `curl -s -F "file=@/var/log/messages" http://<LAN_IP>:8080/88-s`
+  - Hoặc Alpine wget: `wget -qO- --post-file=/etc/issue http://<LAN_IP>:8080/88-s`
+- [ ] **Bước 4 (Web RX):** Hoặc mở Web RX `http://localhost:8080/88-r`, bấm nút **`[⚡ COPY LINK MỜI GỬI (TX)]`** hoặc **`[⚡ RÚT GỌN]`**, dán sang máy khách để mở Web TX kéo thả file về Host.
+- [ ] **Tiêu chí Đạt:**
+  - Host RX nhận dữ liệu tức thì không trễ, không lỗi 409.
+  - Phía Guest nhận phản hồi thành công `SENT` hoặc `HTTP 200`.
 
 ---
 

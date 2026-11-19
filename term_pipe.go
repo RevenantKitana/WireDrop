@@ -148,7 +148,9 @@ func printTerminalPipeHelp() {
 	fmt.Println()
 	fmt.Println("VÍ DỤ TRUYỀN NHANH:")
 	fmt.Println("  wiredrop 88                        Mở prompt tương tác phát text/file")
-	fmt.Println("  wiredrop 88 -r                     Lắng nghe dữ liệu phòng 88 trên terminal")
+	fmt.Println("  wiredrop 88 -s                     Mở prompt phát với link rút gọn s.wd.io.vn")
+	fmt.Println("  wiredrop 88 -r                     Lắng nghe dữ liệu phòng 88 trên terminal (kèm Cheatsheet TX)")
+	fmt.Println("  wiredrop 88 -r -s                  Lắng nghe với Cheatsheet TX rút gọn s.wd.io.vn")
 	fmt.Println("  cat script.sh | wiredrop 88        Pipe trực tiếp script vào phòng 88")
 	fmt.Println("  wiredrop 88 -r | bash              Hứng dữ liệu và thực thi trực tiếp qua bash")
 }
@@ -530,13 +532,42 @@ func runTerminalReceiver(serverURL, slug string, isQuiet, useShortlink bool) {
 	targetURL := fmt.Sprintf("%s/%s-r?live=1", serverURL, slug)
 
 	if !isQuiet {
+		lanIP := getLocalOutboundIP()
+		port := "8080"
+		if u, err := url.Parse(serverURL); err == nil && u.Port() != "" {
+			port = u.Port()
+		}
+
+		urlDirectTx := fmt.Sprintf("http://%s:%s/%s-s", lanIP, port, slug)
+		var displayTxWeb string
+
+		if useShortlink {
+			_, shortS := registerShortlinkWithGateway("https://s.wd.io.vn", slug, serverURL)
+			if shortS != "" {
+				displayTxWeb = shortS
+			}
+		}
+
+		if displayTxWeb == "" {
+			displayTxWeb = urlDirectTx
+		}
+
 		fmt.Println()
 		fmt.Println("================================================================")
 		fmt.Printf("  ⚡ WIREDROP PIPE: %s [ĐẦU NHẬN RX ĐANG LẮNG NGHE]\n", slug)
 		fmt.Println("================================================================")
-		fmt.Printf("  • Kết nối tới: %s\n", targetURL)
-		fmt.Println("  • Đang chờ dữ liệu từ Đầu Phát (TX)... (Nhấn Ctrl+C để thoát)")
+		fmt.Println("  Chạy 1 trong các lệnh sau tại Máy Khách / Máy Ảo (TX) để đẩy dữ liệu về:")
+		fmt.Println()
+		fmt.Printf("  📱 Web / Điện thoại (TX):     %s\n", displayTxWeb)
+		fmt.Printf("  🐧 Linux/macOS curl đẩy file: curl -s -F \"file=@<path>\" %s\n", displayTxWeb)
+		fmt.Printf("  📟 Linux/macOS curl đẩy text: echo \"data\" | curl -s -X POST --data-binary @- %s\n", displayTxWeb)
+		fmt.Printf("  🏔️ Alpine Linux (wget file):  wget -qO- --post-file=<path> %s\n", displayTxWeb)
+		fmt.Println()
+		fmt.Printf("  (Nếu máy khách ĐÃ CÓ WireDrop binary: cat <file> | wiredrop %s)\n", slug)
 		fmt.Println("----------------------------------------------------------------")
+		fmt.Printf("  • Luồng nhận dữ liệu cục bộ: %s\n", targetURL)
+		fmt.Println("  • Đang chờ dữ liệu từ Đầu Phát (TX)... (Nhấn Ctrl+C để thoát)")
+		fmt.Println("================================================================")
 	}
 
 	sigChan := make(chan os.Signal, 1)

@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/style.css?v=0.7.2">
+    <link rel="stylesheet" href="/style.css?v=0.8.3">
 </head>
 <body>
     <div class="wrap">
@@ -267,7 +267,11 @@ Write-Host 'Hello from WireDrop' -ForegroundColor Green
 
                 <!-- THANH THAO TÁC CỐ ĐỊNH Ở DƯỚI -->
                 <div class="rx-fixed-bar">
-                    <div class="rx-bar-header" style="justify-content: flex-end;">
+                    <div class="rx-bar-header" style="justify-content: space-between;">
+                        <div class="rx-invite-wrap" style="display: flex; gap: 8px; align-items: center;">
+                            <button id="btnCopyTxInvite" class="btn-white" type="button" title="Sao chép link mời máy khách gửi dữ liệu (TX)">⚡ COPY LINK MỜI GỬI (TX)</button>
+                            <button id="btnShortenRx" class="btn-white" type="button" title="Tạo shortlink s.wd.io.vn cho máy gửi">⚡ RÚT GỌN</button>
+                        </div>
                         <button id="btnCopyRecvText" class="btn-black">COPY DỮ LIỆU</button>
                     </div>
                 </div>
@@ -290,6 +294,6 @@ Write-Host 'Hello from WireDrop' -ForegroundColor Green
     </div>
 
     <div id="toast">[ ĐÃ SAO CHÉP ]</div>
-    <script src="/app.js?v=0.7.2"></script>
+    <script src="/app.js?v=0.8.3"></script>
 </body>
 </html>

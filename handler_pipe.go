@@ -261,10 +261,14 @@ func handleReceiver(w http.ResponseWriter, r *http.Request) {
 
 	room, exists := globalRooms.Get(slug)
 	if !exists {
-		// Trả về comment rỗng an toàn nếu phòng chưa từng tồn tại
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = w.Write([]byte("# WireDrop: (empty)\n"))
-		return
+		if r.URL.Query().Get("live") == "1" {
+			room = globalRooms.GetOrCreate(slug)
+		} else {
+			// Trả về comment rỗng an toàn nếu phòng chưa từng tồn tại
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			_, _ = w.Write([]byte("# WireDrop: (empty)\n"))
+			return
+		}
 	}
 	room.Touch()
 

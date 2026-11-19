@@ -73,6 +73,7 @@
     }
 
     let activeShortURL = null;
+    let activeShortTxURL = null;
 
     function updateCheatCode() {
         if (isHome) return;
@@ -956,6 +957,44 @@
         fetch(`/${slug}/ack?action=copy`, { method: "POST" }).catch(() => {});
     };
 
+    const btnCopyTxInvite = $("btnCopyTxInvite");
+    if (btnCopyTxInvite) {
+        btnCopyTxInvite.onclick = () => {
+            const txUrl = activeShortTxURL || `${location.origin}/${slug}-s`;
+            copyText(txUrl, "[✓ ĐÃ SAO CHÉP LINK MỜI GỬI (TX)]");
+        };
+    }
+
+    const btnShortenRx = $("btnShortenRx");
+    if (btnShortenRx) {
+        btnShortenRx.onclick = async () => {
+            btnShortenRx.textContent = "ĐANG TẠO...";
+            btnShortenRx.disabled = true;
+            try {
+                const res = await fetch("/api/shorten", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ slug: slug })
+                });
+                const data = await res.json();
+                if (data && data.short_s) {
+                    activeShortTxURL = data.short_s;
+                    if (data.short_r) activeShortURL = data.short_r;
+                    copyText(data.short_s, "[✓ ĐÃ TẠO SHORTLINK MỜI GỬI (TX)]");
+                    btnShortenRx.textContent = "✓ ĐÃ RÚT GỌN";
+                } else {
+                    btnShortenRx.textContent = "⚡ RÚT GỌN";
+                    btnShortenRx.disabled = false;
+                    showToast("[KHÔNG THỂ TẠO SHORTLINK]");
+                }
+            } catch (e) {
+                btnShortenRx.textContent = "⚡ RÚT GỌN";
+                btnShortenRx.disabled = false;
+                showToast("[LỖI KẾT NỐI SHORTLINK GATEWAY]");
+            }
+        };
+    }
+
     const btnShorten = $("btnShorten");
     const shortenTooltip = $("shortenTooltip");
     if (shortenTooltip) {
@@ -977,8 +1016,9 @@
                     body: JSON.stringify({ slug: slug })
                 });
                 const data = await res.json();
-                if (data && data.short_r) {
-                    activeShortURL = data.short_r;
+                if (data && (data.short_r || data.short_s)) {
+                    if (data.short_r) activeShortURL = data.short_r;
+                    if (data.short_s) activeShortTxURL = data.short_s;
                     updateCheatCode();
                     btnShorten.textContent = "✓ ĐÃ RÚT GỌN";
                     showToast("[ĐÃ TẠO SHORTLINK s.wd.io.vn]");

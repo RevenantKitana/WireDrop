@@ -1309,4 +1309,81 @@ func TestDeliveredAckAndCliConsumption(t *testing.T) {
 	}
 }
 
+func TestReverseFlowUplinkAndGuestTX(t *testing.T) {
+	handler := createHandler()
+	ts := httptest.NewServer(handler)
+	defer ts.Close()
+
+	slug := "reverseflow"
+
+	// 1. Kiểm tra API shorten cung cấp cả short_r và short_s
+	shortenReqBody := `{"slug":"reverseflow"}`
+	respShort, err := http.Post(ts.URL+"/api/shorten", "application/json", strings.NewReader(shortenReqBody))
+	if err != nil || respShort.StatusCode != http.StatusOK {
+		t.Fatalf("Lỗi gọi /api/shorten: %v", err)
+	}
+	var shortResult map[string]interface{}
+	_ = json.NewDecoder(respShort.Body).Decode(&shortResult)
+	respShort.Body.Close()
+
+	shortS, hasS := shortResult["short_s"].(string)
+	if !hasS || !strings.Contains(shortS, "reverseflow-s") {
+		t.Fatalf("Kỳ vọng short_s hợp lệ, nhận: %v", shortResult)
+	}
+
+	// 2. Mở luồng lắng nghe Host RX (như lệnh wiredrop <slug> -r)
+	rxURL := fmt.Sprintf("%s/%s-r?live=1", ts.URL, slug)
+	rxReq, _ := http.NewRequest(http.MethodGet, rxURL, nil)
+	rxReq.Header.Set("Accept", "text/plain")
+
+	rxResp, err := http.DefaultClient.Do(rxReq)
+	if err != nil || rxResp.StatusCode != http.StatusOK {
+		t.Fatalf("Lỗi mở luồng RX: %v", err)
+	}
+	defer rxResp.Body.Close()
+
+	rxLinesChan := make(chan string, 10)
+	go func() {
+		reader := bufio.NewReader(rxResp.Body)
+		for {
+			line, errRead := reader.ReadString('\n')
+			if errRead != nil {
+				return
+			}
+			rxLinesChan <- strings.TrimSpace(line)
+		}
+	}()
+
+	// 3. Guest VM đẩy stream text về Host qua POST /{slug}-s (như curl pipe hoặc echo ... | curl)
+	guestPostURL := fmt.Sprintf("%s/%s-s?live=1", ts.URL, slug)
+	msgFromGuest := "BUILD_SUCCESS_LOG_12345"
+	txReq, _ := http.NewRequest(http.MethodPost, guestPostURL, strings.NewReader(msgFromGuest+"\n"))
+	txReq.Header.Set("Content-Type", "text/plain")
+	txReq.Header.Set("X-Live", "1")
+
+	txResp, err := http.DefaultClient.Do(txReq)
+	if err != nil || txResp.StatusCode != http.StatusOK {
+		t.Fatalf("Guest VM không thể đẩy dữ liệu lên: %v", err)
+	}
+	txResp.Body.Close()
+
+	// 4. Kiểm tra Host RX có nhận được dòng log từ Guest VM không
+	timeout := time.After(2 * time.Second)
+	for {
+		select {
+		case line := <-rxLinesChan:
+			if strings.HasPrefix(line, "#") || strings.HasPrefix(line, ":") {
+				continue
+			}
+			if line != msgFromGuest {
+				t.Fatalf("Host RX nhận nội dung sai: %q != %q", line, msgFromGuest)
+			}
+			return // Thành công!
+		case <-timeout:
+			t.Fatalf("Host RX timeout không nhận được log từ Guest VM")
+		}
+	}
+}
+
+
 

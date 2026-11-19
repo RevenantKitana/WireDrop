@@ -607,6 +607,7 @@ main, #homeView, #senderView, #receiverView {
 #toast.show { opacity: 1; }
 
 @media (max-width: 640px) {
+    .rx-bar-header { flex-wrap: wrap; gap: 8px; }
     .rx-bar-content { flex-direction: column; align-items: stretch; }
     .rx-bar-content .btn-black { width: 100%; text-align: center; }
     .launcher-row { flex-wrap: wrap; }

@@ -9,7 +9,8 @@ Mọi file được đặt tên theo quy chuẩn: `NN-v0.X.Y-<slug>.md` để đ
 ## Danh Sách Changelog Theo Các Giai Đoạn Phát Triển:
 
 ### 🚀 Giai Đoạn 8: Terminal-Native Pipe & Tinh Khiết Hóa Codebase (v0.8.x)
-* [30-v0.8.2 - Tối Ưu Hóa Thực Chiến Máy Ảo, Delivered ACK Phía TX, Ngăn Xếp 3 Gói Text & Hỗ Trợ Alpine Linux (wget)](30-v0.8.2-realworld-vm-hardening-and-delivery-ack.md) - *(2026-11-19)* 🚀 **Mới nhất (State hiện tại)**
+* [31-v0.8.3 - Hỗ Trợ Luồng Nghịch (Guest TX → Host RX) & Shortlink Uplink Cho Máy Khách](31-v0.8.3-reverse-flow-uplink-and-guest-tx-shortlink.md) - *(2026-11-19)* 🚀 **Mới nhất (State hiện tại)**
+* [30-v0.8.2 - Tối Ưu Hóa Thực Chiến Máy Ảo, Delivered ACK Phía TX, Ngăn Xếp 3 Gói Text & Hỗ Trợ Alpine Linux (wget)](30-v0.8.2-realworld-vm-hardening-and-delivery-ack.md) - *(2026-11-19)*
 * [29-v0.8.1 - Gọt Tỉa Codebase Cực Hạn, Triệt Tiêu Râu Ria & Đóng Băng Phạm Vi (Scope Freeze)](29-v0.8.1-codebase-pruning-and-minimalist-hardening.md) - *(2026-11-19)*
 * [28-v0.8.0 - Terminal-Native Pipe Trực Tiếp, Cú Pháp Siêu Ngắn & Cơ Chế Rút Gọn Link Tuyển Chọn](28-v0.8.0-ultra-simplified-terminal-pipe-and-selective-shortlink.md) - *(2026-11-19)*
 

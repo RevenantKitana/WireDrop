@@ -29,6 +29,7 @@ Mọi tài liệu được đặt tên theo quy chuẩn sắp xếp tự nhiên 
 | **05** | [05-specprepare-codebase-pruning-and-minimalist-hardening.md](05-specprepare-codebase-pruning-and-minimalist-hardening.md) | `v0.8.1` | 🚀 **IMPLEMENTED** | Rà soát tối giản hóa cực hạn, gọt tỉa râu ria (Fluff Pruning), khóa chặt kim chỉ nam gốc ("A giao dịch B ít bước nhất") và tuyên bố đóng băng phạm vi (Scope Freeze). |
 | **06** | [06-manual-acceptance-test-checklist.md](06-manual-acceptance-test-checklist.md) | `v0.8.1` | 📋 **CHECKLIST** | Bảng checklist kiểm thử thực tế và nghiệm thu toàn diện (17 handtest cases) phủ kín 6 phân hệ cốt lõi của WireDrop. |
 | **07** | [07-realworld-vm-hardening-and-delivery-ack.md](07-realworld-vm-hardening-and-delivery-ack.md) | `v0.8.2` | 🚀 **IMPLEMENTED** | Tối ưu thực chiến máy ảo VMware/Alpine: Nhận diện Windows CLI toàn cục (`wiredrop install`), Phản hồi nhận tin TX (Delivered ACK), Ngăn xếp 3 gói text gần nhất (0 byte server) & Cú pháp `wget -qO-` cho Alpine Linux. |
+| **08** | [08-reverse-flow-uplink-and-guest-tx-shortlink.md](08-reverse-flow-uplink-and-guest-tx-shortlink.md) | `v0.8.3` | 🚀 **IMPLEMENTED** | Hỗ trợ luồng nghịch (Guest TX $\rightarrow$ Host RX): Cheatsheet Uplink trong `wiredrop <room> -r [-s]` cho máy khách/máy ảo, nút sao chép link mời gửi TX & shortlink trên Web RX. |
 
 ---
 
