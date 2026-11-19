@@ -321,6 +321,16 @@ func runInstallCommand() {
 	} else {
 		targetDir = "/usr/local/bin"
 		targetExe = filepath.Join(targetDir, "wiredrop")
+		// Nếu không có quyền ghi /usr/local/bin (không có sudo), fallback vào ~/.local/bin
+		if err := os.MkdirAll(targetDir, 0755); err != nil || os.WriteFile(filepath.Join(targetDir, ".wd_perm_test"), []byte("1"), 0755) != nil {
+			home := os.Getenv("HOME")
+			if home != "" {
+				targetDir = filepath.Join(home, ".local", "bin")
+				targetExe = filepath.Join(targetDir, "wiredrop")
+			}
+		} else {
+			_ = os.Remove(filepath.Join(targetDir, ".wd_perm_test"))
+		}
 	}
 
 	_ = os.MkdirAll(targetDir, 0755)
@@ -358,6 +368,15 @@ func runUninstallCommand() {
 		targetExe = filepath.Join(localApp, "Microsoft", "WindowsApps", "wiredrop.exe")
 	} else {
 		targetExe = "/usr/local/bin/wiredrop"
+		if _, err := os.Stat(targetExe); os.IsNotExist(err) {
+			home := os.Getenv("HOME")
+			if home != "" {
+				userExe := filepath.Join(home, ".local", "bin", "wiredrop")
+				if _, err2 := os.Stat(userExe); err2 == nil {
+					targetExe = userExe
+				}
+			}
+		}
 	}
 
 	if err := os.Remove(targetExe); err != nil {
