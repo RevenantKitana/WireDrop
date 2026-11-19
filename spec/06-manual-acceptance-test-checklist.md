@@ -1,5 +1,5 @@
 # BẢNG CHECKLIST KIỂM THỬ THỰC TẾ & NGHIỆM THU TOÀN DIỆN (ACCEPTANCE TEST)
-# HỆ THỐNG: WireDrop v0.8.1
+# HỆ THỐNG: WireDrop v0.8.2
 
 **Mục đích:** Cung cấp quy trình kiểm thử thủ công từng bước (Handtest Checklist) bao phủ 100% tính năng và các kịch bản thực tế của WireDrop, bám sát nỗi đau nguyên bản: *"A giao dịch với B để ít quy trình nhất — Chân lý tối giản để vừa đạt."*
 
@@ -9,7 +9,7 @@
 
 1. [Phân Hệ 1: Môi Trường Cục Bộ Web ↔ Web (Local Baseline)](#1-phân-hệ-1-môi-trường-cục-bộ-web--web-local-baseline)
 2. [Phân Hệ 2: Terminal-Native Pipe Tương Tác & Lệnh Đường Ống (CLI ↔ CLI)](#2-phân-hệ-2-terminal-native-pipe-tương-tác--lệnh-đường-ống-cli--cli)
-3. [Phân Hệ 3: Máy Khách Trắng Tinh / Máy Ảo Xa Lạ (VMware & Headless OS)](#3-phân-hệ-3-máy-khách-trắng-tinh--máy-ảo-xa-lạ-vmware--headless-os)
+3. [Phân Hệ 3: Máy Khách Trắng Tinh / Máy Ảo Xa Lạ (VMware, Alpine & Headless OS)](#3-phân-hệ-3-máy-khách-trắng-tinh--máy-ảo-xa-lạ-vmware-alpine--headless-os)
 4. [Phân Hệ 4: FastHost Tunnel & Cổng Rút Gọn s.wd.io.vn (Qua Mạng Internet)](#4-phân-hệ-4-fasthost-tunnel--cổng-rút-gọn-swdiovn-qua-mạng-internet)
 5. [Phân Hệ 5: Trải Nghiệm Thiết Bị Di Động & Tải File Nền (Mobile UX)](#5-phân-hệ-5-trải-nghiệm-thiết-bị-di-động--tải-file-nền-mobile-ux)
 6. [Phân Hệ 6: Các Ca Biên, Khóa Kết Nối & Phục Hồi Lỗi (Edge Cases & Resilience)](#6-phân-hệ-6-các-ca-biên-khóa-kết-nối--phục-hồi-lỗi-edge-cases--resilience)
@@ -18,7 +18,7 @@
 
 ## 1. PHÂN HỆ 1: MÔI TRƯỜNG CỤC BỘ WEB ↔ WEB (LOCAL BASELINE)
 
-> **Mục tiêu:** Kiểm tra hoạt động của Sợi dây 2 đầu trên trình duyệt thông thường ở mạng nội bộ.
+> **Mục tiêu:** Kiểm tra hoạt động của Sợi dây 2 đầu trên trình duyệt thông thường ở mạng nội bộ, bao gồm cơ chế Báo nhận (Delivered ACK) và Ngăn xếp 3 gói text gần nhất.
 
 ### ✅ Case 1.1: Truyền Văn Bản Thời Gian Thực (Live Text Streaming)
 - [ ] **Bước 1:** Mở Terminal chạy server: `wiredrop server` (hoặc `wiredrop 88 -w`).
@@ -34,7 +34,21 @@
 
 ---
 
-### ✅ Case 1.2: Truyền File Lớn Đa Mảnh Zero-Disk (Turbo 256KB & 16MB Buffer)
+### ✅ Case 1.2: Phản Hồi Báo Nhận Tin TX (Delivered ACK) & Ngăn Xếp 3 Gói Text
+- [ ] **Kiểm tra Báo Nhận Tin (Delivered ACK):**
+  - Tại Tab 1 (TX), gõ một đoạn lệnh và quan sát huy hiệu trạng thái: `[ĐANG CHỜ RX...]`.
+  - Tại Tab 2 (RX), bấm nút **`[SAO CHÉP]`**.
+  - Quay lại Tab 1 (TX): Huy hiệu lập tức chuyển sang màu xanh lá:  
+    `✓ ĐÃ ĐẾN MÁY ĐÍCH [RX Web (copy) lúc HH:mm:ss]`.
+- [ ] **Kiểm tra Ngăn Xếp 3 Gói Text (Client History - 0 Byte Server):**
+  - Tại Tab 1 (TX), gửi lần lượt 3 đoạn text khác nhau (ví dụ: `lệnh 1`, `lệnh 2`, `lệnh 3`).
+  - Hàng chip bên dưới textarea xuất hiện 3 nút: `[#1: lệnh 3...]` `[#2: lệnh 2...]` `[#3: lệnh 1...]`.
+  - Bấm vào chip `#3`: Textarea tự động khôi phục lại nội dung `lệnh 1` và tự lưu sang dây.
+  - Kiểm tra Task Manager / Server: Không có database, không ghi ổ đĩa (lưu thuần `localStorage`).
+
+---
+
+### ✅ Case 1.3: Truyền File Lớn Đa Mảnh Zero-Disk (Turbo 256KB & 16MB Buffer)
 - [ ] **Bước 1:** Tại Tab 1 (TX), chuyển sang chế độ **"GỬI FILE"**.
 - [ ] **Bước 2:** Kéo thả một file lớn (> 20MB đến 100MB, ví dụ: file zip hoặc video) vào vùng dropzone.
 - [ ] **Kiểm tra Dashboard bên phát (TX):**
@@ -52,23 +66,39 @@
 
 ## 2. PHÂN HỆ 2: TERMINAL-NATIVE PIPE TƯƠNG TÁC & LỆNH ĐƯỜNG ỐNG (CLI ↔ CLI)
 
-> **Mục tiêu:** Nghiệm thu trải nghiệm dòng lệnh mượt mà như `netcat` / `ssh pipe`.
+> **Mục tiêu:** Nghiệm thu lệnh toàn cục Windows, trải nghiệm dòng lệnh mượt mà như `netcat` / `ssh pipe` và phản hồi nhận tin trong console.
 
-### ✅ Case 2.1: Phiên REPL Tương Tác Bên Phát (`wiredrop <room>`)
+### ✅ Case 2.1: Nhận Diện Lệnh Toàn Cục Trên Windows (`wiredrop install` & `install.bat`)
+- [ ] **Bước 1:** Chạy tệp 1-click `install.bat` (hoặc mở CMD gõ: `.\wiredrop.exe install`).
+- [ ] **Kiểm tra:**
+  - In thông báo: `✓ ĐÃ CÀI ĐẶT WIREDROP TOÀN CỤC THÀNH CÔNG (v0.8.2)`.
+  - File được copy vào `%LOCALAPPDATA%\Microsoft\WindowsApps\wiredrop.exe`.
+- [ ] **Bước 2 (Kiểm tra thực tế):**
+  - Mở một cửa sổ CMD hoặc PowerShell hoàn toàn mới ở bất kỳ thư mục nào (ví dụ: `C:\Users\...` hoặc ổ `D:\`).
+  - Gõ trực tiếp: `wiredrop -h` $\rightarrow$ Nhận diện lệnh ngay lập tức mà không cần tiền tố `.\`.
+
+---
+
+### ✅ Case 2.2: Phiên REPL Tương Tác Bên Phát (`wiredrop <room>`) & Phản Hồi Nhận Tin
 - [ ] **Bước 1:** Mở Terminal 1, gõ lệnh: `wiredrop 88`
 - [ ] **Kiểm tra Banner & Cheat Sheet:**
-  - In banner phiên bản: `WireDrop v0.8.1 - Terminal-Native Pipe & Live Relay`.
-  - In Cheat Sheet các câu lệnh sẵn sàng copy cho máy nhận (Linux curl, Win irm, URL).
+  - In banner phiên bản: `WireDrop v0.8.2 - Terminal-Native Pipe & Live Relay`.
+  - In Cheat Sheet các câu lệnh sẵn sàng copy cho máy nhận, bao gồm cả:
+    - `🐧 Linux / macOS (curl): curl -sL <url> | sh`
+    - `🏔️ Alpine Linux (wget): wget -qO- <url> | sh`
+    - `🪟 Windows PowerShell: irm <url> | iex`
   - Xuất hiện prompt: `[88-s:TX]> `
-- [ ] **Kiểm tra Lệnh Nội Bộ:**
-  - Gõ `:status` $\rightarrow$ In thông báo: `[i] Trạng thái: Đang chờ RX kết nối...` (hoặc `RX ĐANG ONLINE`).
+- [ ] **Kiểm tra Lệnh Nội Bộ & Phản Hồi Nhận Tin Console:**
   - Gõ văn bản bất kỳ: `echo "Hello WireDrop"` $\rightarrow$ Dữ liệu được nạp vào dây.
-  - Gõ `:clear` $\rightarrow$ Dữ liệu trên dây bị xóa sạch (`✓ Đã gửi lệnh xóa bộ đệm`).
+  - Khi máy nhận (CLI hoặc Web) kéo dữ liệu về: Terminal TX tự động in thông báo:  
+    `[✓] Máy đích (cli - read) đã nhận dữ liệu lúc HH:mm:ss!`.
+  - Gõ `:status` $\rightarrow$ In thông báo trạng thái kết nối RX.
+  - Gõ `:clear` $\rightarrow$ Xóa sạch dữ liệu phòng (`✓ Đã gửi lệnh xóa bộ đệm`).
   - Gõ `:exit` (hoặc nhấn `Ctrl+C`) $\rightarrow$ Thoát an toàn khỏi phiên làm việc.
 
 ---
 
-### ✅ Case 2.2: Nạp File Nhị Phân Ngay Trong REPL (`:file <path>`)
+### ✅ Case 2.3: Nạp File Nhị Phân Ngay Trong REPL (`:file <path>`)
 - [ ] **Bước 1:** Tại Terminal 1 (`wiredrop 88`), gõ: `:file C:\path\to\sample.zip`
 - [ ] **Kiểm tra:**
   - Terminal hiển thị: `[*] Bắt đầu nạp file: sample.zip (<size>)`
@@ -77,7 +107,7 @@
 
 ---
 
-### ✅ Case 2.3: Chế Độ Đường Ống Tự Động Đầu Vào (Zero-Flag Stdin Piping)
+### ✅ Case 2.4: Chế Độ Đường Ống Tự Động Đầu Vào (Zero-Flag Stdin Piping)
 - [ ] **Bước 1:** Mở Terminal 2 (bên nhận): `wiredrop 88 -r`
 - [ ] **Bước 2:** Mở Terminal 1 (bên phát), chạy lệnh pipe trực tiếp:
   - Trên Linux/macOS: `cat /etc/hosts | wiredrop 88`
@@ -88,7 +118,7 @@
 
 ---
 
-### ✅ Case 2.4: Chế Độ Đường Ống Tự Động Đầu Ra (Zero-Flag Stdout Piping)
+### ✅ Case 2.5: Chế Độ Đường Ống Tự Động Đầu Ra (Zero-Flag Stdout Piping)
 - [ ] **Bước 1:** Bên phát đẩy 1 đoạn lệnh bash vào phòng 88.
 - [ ] **Bước 2:** Bên nhận chạy pipe thẳng sang shell:
   - `wiredrop 88 -r | bash` (trên Linux)
@@ -98,14 +128,15 @@
 
 ---
 
-## 3. PHÂN HỆ 3: MÁY KHÁCH TRẮNG TINH / MÁY ẢO XA LẠ (VMWARE & HEADLESS OS)
+## 3. PHÂN HỆ 3: MÁY KHÁCH TRẮNG TINH / MÁY ẢO XA LẠ (VMWARE, ALPINE & HEADLESS OS)
 
-> **Mục tiêu:** Thẩm định bài toán cốt lõi: Máy nhận không cài WireDrop, không có trình duyệt, gõ tay ít ký tự nhất.
+> **Mục tiêu:** Thẩm định bài toán cốt lõi: Máy nhận không cài WireDrop, không có trình duyệt, gõ tay ít ký tự nhất trên cả Debian/Ubuntu, Alpine Linux và Windows.
 
 ### ✅ Case 3.1: Máy Khách Linux / macOS (Chỉ dùng `curl` có sẵn)
 - [ ] **Kịch bản Lấy Script & Thực Thi Luôn:**
-  - Trên máy ảo Linux, gõ: `curl -sL http://<IP>:8080/88-r | sh`
+  - Trên máy ảo Linux (Debian, Ubuntu, CentOS...), gõ: `curl -sL http://<IP>:8080/88-r | sh`
   - Kiểm tra: Kịch bản được kéo về và thực thi ngay lập tức.
+  - Bên TX nhận ngay thông báo: `[✓] Máy đích (cli - read) đã nhận dữ liệu`.
 - [ ] **Kịch bản Xem Nội Dung Trực Tiếp:**
   - Gõ: `curl -sL http://<IP>:8080/88-r`
   - Kiểm tra: In toàn bộ văn bản hoặc mã nguồn ra console.
@@ -115,7 +146,19 @@
 
 ---
 
-### ✅ Case 3.2: Máy Khách Windows (Chỉ dùng PowerShell có sẵn)
+### ✅ Case 3.2: Máy Khách Tối Giản Alpine Linux / BusyBox (Chỉ dùng `wget` có sẵn)
+- [ ] **Kịch bản Lấy Script & Thực Thi Trên Alpine (`alpine-virt`):**
+  - Trên máy ảo Alpine Linux trắng tinh (không cài `curl`), gõ lệnh chuẩn 29 ký tự:  
+    `wget -qO- http://<IP>:8080/88-r | sh`
+  - Kiểm tra: Script chạy trơn tru, không báo lỗi `curl: not found`.
+  - Bên TX nhảy ngay phản hồi: `✓ ĐÃ ĐẾN MÁY ĐÍCH [RX CLI (curl/wget)]`.
+- [ ] **Kịch bản Tải File Nhị Phân Trên Alpine:**
+  - Gõ: `wget -O app.bin http://<IP>:8080/88-r` (hoặc `wget http://<IP>:8080/88-r`).
+  - Kiểm tra: File tải về nguyên vẹn byte gốc.
+
+---
+
+### ✅ Case 3.3: Máy Khách Windows (Chỉ dùng PowerShell có sẵn)
 - [ ] **Kịch bản Thực Thi Lệnh Không Trình Duyệt:**
   - Mở PowerShell trên máy nhận, gõ: `irm http://<IP>:8080/88-r | iex`
   - Kiểm tra: Lệnh PowerShell thực thi trơn tru.
@@ -127,7 +170,7 @@
 
 ## 4. PHÂN HỆ 4: FASTHOST TUNNEL & CỔNG RÚT GỌN s.wd.io.vn (QUA INTERNET)
 
-> **Mục tiêu:** Nghiệm thu khả năng vượt tường lửa NAT/Router và tối ưu độ ngắn link nhập liệu.
+> **Mục tiêu:** Nghiệm thu khả năng vượt tường lửa NAT/Router, tab ALPINE trên Web RX và tối ưu độ ngắn link nhập liệu.
 
 ### ✅ Case 4.1: Khởi Chạy Cloudflare Quick Tunnel Tự Động
 - [ ] **Bước 1:** Chạy `wiredrop host` (hoặc mở `dist\wiredrop-portable.exe`).
@@ -141,7 +184,7 @@
 
 ---
 
-### ✅ Case 4.2: Cơ Chế Rút Gọn Link Tuyển Chọn (Opt-In Shortlink)
+### ✅ Case 4.2: Cơ Chế Rút Gọn Link Tuyển Chọn & Tab ALPINE Trên Web RX
 - [ ] **Bước 1:** Mở trang TX trên Web qua link `trycloudflare.com`.
 - [ ] **Kiểm tra Tooltip Gợi Ý:**
   - Tooltip nhấp nháy xuất hiện: `Link quá dài? Rút gọn ngay! 👇`.
@@ -151,6 +194,11 @@
   - Nút chuyển trạng thái thành `✓ ĐÃ RÚT GỌN`.
   - Thanh lệnh RX tự động đổi link thành: `https://s.wd.io.vn/<room>-r`.
   - Tooltip tự động biến mất.
+- [ ] **Bước 3:** Kiểm tra các Tab trên Thanh RX Bar:
+  - Bấm tab **`LINUX`**: Hiển thị `curl -sL https://s.wd.io.vn/<room>-r | sh`.
+  - Bấm tab **`ALPINE`**: Hiển thị `wget -qO- https://s.wd.io.vn/<room>-r | sh`.
+  - Bấm tab **`WIN`**: Hiển thị `irm https://s.wd.io.vn/<room>-r | iex`.
+  - Bấm tab **`URL`**: Hiển thị `https://s.wd.io.vn/<room>-r`.
 
 ---
 
@@ -230,10 +278,10 @@
 
 | Phân hệ kiểm thử | Tổng số ca | Đạt (PASS) | Chưa đạt (FAIL) | Đánh giá chung |
 | :--- | :---: | :---: | :---: | :--- |
-| **1. Web ↔ Web Cục Bộ** | 2 | [ ] | [ ] | Chạy mượt mà qua RAM, 0 Byte Disk. |
-| **2. Terminal-Native Pipe** | 4 | [ ] | [ ] | Cú pháp siêu ngắn, pipe Unix trơn tru. |
-| **3. Máy Khách Xa Lạ (VM)** | 2 | [ ] | [ ] | 0 cài đặt, lệnh 1 dòng thực thi ngay. |
-| **4. FastHost & s.wd.io.vn** | 3 | [ ] | [ ] | Vượt NAT tốt, link 12 ký tự gõ siêu nhanh. |
-| **5. Mobile UX & Tải Nền** | 2 | [ ] | [ ] | Wake Lock hoạt động, giao diện tối giản. |
-| **6. Ca Biên & Khóa 1-1** | 4 | [ ] | [ ] | Khóa 409 chuẩn xác, abort an toàn. |
-| **TỔNG CỘNG** | **17** | **[ ]** | **[ ]** | **Sẵn sàng nghiệm thu xuất xưởng.** |
+| **1. Web ↔ Web Cục Bộ** | 3 | [ ] | [ ] | Text SSE, Delivered ACK xanh lá & 3-Text Stack. |
+| **2. Terminal-Native Pipe** | 5 | [ ] | [ ] | `wiredrop install`, REPL ACK & Unix pipe. |
+| **3. Máy Khách Xa Lạ (VM)** | 3 | [ ] | [ ] | Linux curl, Alpine `wget -qO-`, Windows irm. |
+| **4. FastHost & s.wd.io.vn** | 3 | [ ] | [ ] | Quick Tunnel 4G, Tab ALPINE & shortlink 12 ký tự. |
+| **5. Mobile UX & Tải Nền** | 2 | [ ] | [ ] | Responsive, Screen Wake Lock chống sleep. |
+| **6. Ca Biên & Khóa 1-1** | 4 | [ ] | [ ] | Khóa 409 chuẩn xác, Abort an toàn, Backpressure. |
+| **TỔNG CỘNG** | **20** | **[ ]** | **[ ]** | **Sẵn sàng nghiệm thu thực chiến toàn diện.** |
