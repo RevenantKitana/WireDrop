@@ -103,6 +103,16 @@
                 $("cheatCode").textContent = urlRx;
             }
         }
+
+        const tipEl = $("shortenTooltip");
+        if (tipEl) {
+            const isLongUrl = location.origin.includes("trycloudflare.com") || location.origin.length > 28;
+            if (isSender && isLongUrl && !activeShortURL) {
+                tipEl.style.display = "block";
+            } else {
+                tipEl.style.display = "none";
+            }
+        }
     }
 
     function showLockout(msg) {
@@ -884,8 +894,17 @@
     $("btnCopyRecvText").onclick = () => copyText($("recvTextDisplay").querySelector("code").textContent);
 
     const btnShorten = $("btnShorten");
+    const shortenTooltip = $("shortenTooltip");
+    if (shortenTooltip) {
+        shortenTooltip.onclick = () => {
+            if (btnShorten && !btnShorten.disabled) {
+                btnShorten.click();
+            }
+        };
+    }
     if (btnShorten) {
         btnShorten.onclick = async () => {
+            if (shortenTooltip) shortenTooltip.style.display = "none";
             btnShorten.textContent = "ĐANG TẠO...";
             btnShorten.disabled = true;
             try {

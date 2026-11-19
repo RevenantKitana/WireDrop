@@ -277,24 +277,24 @@ func runPortableHost() {
 
 	cfg := loadEnvFile(exeDir)
 
-	// Kiểm tra đối số dòng lệnh trực tiếp (ví dụ: wiredrop host 1, wiredrop host 2)
+	// Kiểm tra đối số dòng lệnh trực tiếp (ví dụ: wiredrop host 1, wiredrop host 2, wiredrop host -s)
 	mode := ""
+	useShortlink := false
 	if len(os.Args) > 1 {
 		for _, arg := range os.Args[1:] {
+			if arg == "-s" || arg == "-short" || arg == "--short" {
+				useShortlink = true
+			}
 			if arg == "1" || arg == "--quick" {
 				mode = "1"
 				break
 			}
-			if arg == "-s" || arg == "-short" || arg == "--short" || arg == "2" {
+			if arg == "2" || arg == "--custom" {
 				mode = "2"
 				break
 			}
-			if arg == "3" || arg == "--custom" {
+			if arg == "3" || arg == "--local" {
 				mode = "3"
-				break
-			}
-			if arg == "4" || arg == "--local" {
-				mode = "4"
 				break
 			}
 		}
@@ -315,13 +315,12 @@ func runPortableHost() {
 		fmt.Println("================================================================")
 		fmt.Printf("     ⚡ WIREDROP PORTABLE %s - CLOUDFLARE TUNNEL LAUNCHER      \n", Version)
 		fmt.Println("================================================================")
-		fmt.Println(" [1] Quick Tunnel Truc Tiep (Mac dinh - Nhanh nhat, Khong trung gian)")
-		fmt.Println(" [2] Quick Tunnel + Rut gon Shortlink (s.wd.io.vn - De go Mobile)")
-		fmt.Printf(" [3] %s\n", labelCustom)
-		fmt.Println(" [4] Chi chay cuc bo (Local Only - Khong mo Internet)")
+		fmt.Println(" [1] Domain ngau nhien (Quick Tunnel - Mac dinh)")
+		fmt.Printf(" [2] %s\n", labelCustom)
+		fmt.Println(" [3] Chi chay cuc bo (Local Only - Khong mo Internet)")
 		fmt.Println(" [0] Thoat")
 		fmt.Println("----------------------------------------------------------------")
-		fmt.Print("Lua chon cua ban [1/2/3/4/0] (Mac dinh: 1): ")
+		fmt.Print("Lua chon cua ban [1/2/3/0] (Mac dinh: 1): ")
 
 		reader := bufio.NewReader(os.Stdin)
 		input, _ := reader.ReadString('\n')
@@ -336,11 +335,11 @@ func runPortableHost() {
 	case "0":
 		fmt.Println("Tam biet!")
 		return
-	case "4":
+	case "3":
 		// Chạy local thuần túy
 		runLocalServerOnly(cfg.Port)
 		return
-	case "3":
+	case "2":
 		if cfg.CloudflareToken == "" {
 			if !setupCustomDomainEnvInteractive(exeDir, &cfg) {
 				pauseOnExit()
@@ -348,12 +347,10 @@ func runPortableHost() {
 			}
 		}
 		runTunnelFlow(exeDir, cfg, false, false)
-	case "2":
-		runTunnelFlow(exeDir, cfg, true, true)
 	case "1":
 		fallthrough
 	default:
-		runTunnelFlow(exeDir, cfg, true, false)
+		runTunnelFlow(exeDir, cfg, true, useShortlink)
 	}
 
 	pauseOnExit()
