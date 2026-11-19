@@ -27,6 +27,7 @@ Mọi tài liệu được đặt tên theo quy chuẩn sắp xếp tự nhiên 
 | **03** | [03-specprepare-turbo-transfer-optimization.md](03-specprepare-turbo-transfer-optimization.md) | `v0.7.0` | ✅ **APPROVED** | Kế hoạch tăng tốc truyền file thế hệ mới: Pha 1 (`256KB` Sub-Chunk Streaming + `2-Stream` Parallel Pipelining + Tunnel `HTTP/2` + Bậc mảnh 8MB/16MB/32MB). |
 | **04** | [04-specprepare-terminal-pipe-and-selective-shortlink.md](04-specprepare-terminal-pipe-and-selective-shortlink.md) | `v0.8.0` | ✅ **APPROVED** | Đặc tả Terminal-Native Pipe (`wiredrop <room>` như SSH/netcat pipe trực tiếp) & Cơ chế Rút gọn Link Tuyển chọn (Opt-In Shortlink `s.wd.io.vn` trên CLI và Web). |
 | **05** | [05-specprepare-codebase-pruning-and-minimalist-hardening.md](05-specprepare-codebase-pruning-and-minimalist-hardening.md) | `v0.8.1` | 🚀 **IMPLEMENTED** | Rà soát tối giản hóa cực hạn, gọt tỉa râu ria (Fluff Pruning), khóa chặt kim chỉ nam gốc ("A giao dịch B ít bước nhất") và tuyên bố đóng băng phạm vi (Scope Freeze). |
+| **06** | [06-manual-acceptance-test-checklist.md](06-manual-acceptance-test-checklist.md) | `v0.8.1` | 📋 **CHECKLIST** | Bảng checklist kiểm thử thực tế và nghiệm thu toàn diện (17 handtest cases) phủ kín 6 phân hệ cốt lõi của WireDrop. |
 
 ---
 
