@@ -2,9 +2,10 @@
 # (CODEBASE PRUNING & MINIMALIST HARDENING SPECIFICATION)
 # HỆ THỐNG: WireDrop v0.8.x
 
-**Loại tài liệu:** `📝 SPEC-PREPARE` (Tài Liệu Chuẩn Bị Đặc Tả Kiến Trúc & RFC)  
+**Loại tài liệu:** `🚀 IMPLEMENTED` (Đặc Tả Đã Triển Khai Thực Tế & Đóng Băng)  
 **Ngày khởi tạo:** 2026-11-19  
-**Trạng thái:** Chờ Thẩm Định & Phê Duyệt Quyết Định (Pending Review & Approval)  
+**Ngày hoàn thành:** 2026-11-19 (WireDrop v0.8.1)  
+**Trạng thái:** Đã Phê Duyệt & Triển Khai Hoàn Tất (Approved & Implemented)  
 **Tác giả:** Đội ngũ Kiến trúc WireDrop  
 **Kim chỉ nam tối thượng:**  
 > **"A giao dịch với B để ít quy trình nhất — Chân lý tối giản để vừa đạt."**  
@@ -206,17 +207,17 @@ Mọi đề xuất tính năng mới trong tương lai sẽ bị từ chối n�
 
 ---
 
-## 5. BẢNG QUYẾT ĐỊNH CẦN PHÊ DUYỆT (DECISION MATRIX)
+## 5. BẢNG QUYẾT ĐỊNH ĐÃ PHÊ DUYỆT & TRIỂN KHAI (DECISION MATRIX)
 
-Kính chuyển tác giả xem xét và phê duyệt 4 quyết định gọt tỉa trước khi tiến hành làm sạch mã nguồn:
+Bảng tổng hợp kết quả 4 quyết định gọt tỉa đã được tác giả phê duyệt và triển khai thực tế trên WireDrop `v0.8.1`:
 
-| Mã số | Hạng mục đề xuất gọt tỉa | Hành động cụ thể | Lợi ích đạt được |
-| :-: | :--- | :--- | :--- |
-| **Q1** | **Xóa bỏ endpoint `/i` và `/i.ps1`** | Xóa khỏi `handler_pipe.go` và `main.go`. | Cắt giảm 60 dòng code thừa; loại bỏ quy trình cài alias không cần thiết. |
-| **Q2** | **Xóa tab `TX CLI` khỏi RX Bar** | Xóa nút khỏi `index.html` và code điều phối trong `app.js`. | Trả lại sự trong sáng, đúng nghĩa 100% cho thanh lệnh dành cho Người Nhận. |
-| **Q3** | **Chuẩn hóa cú pháp dòng lệnh duy nhất** | Chỉ truyền thông: `wiredrop <room>` và `wiredrop <room> -r`. | Triệt tiêu sự phân mảnh nhận thức; gõ ít nhất, dễ nhớ nhất. |
-| **Q4** | **Cập nhật Cheatsheet Trang Chủ** | Thay thế lệnh curl POST dài bằng cú pháp pipe hiện đại. | Giao diện thanh thoát, trực quan, đúng tinh thần tối giản. |
+| Mã số | Hạng mục gọt tỉa | Hành động cụ thể | Trạng thái | Lợi ích đạt được |
+| :-: | :--- | :--- | :---: | :--- |
+| **Q1** | **Xóa bỏ endpoint `/i` và `/i.ps1`** | Đã xóa khỏi `handler_pipe.go` và `main.go`. | ✅ **DONE** | Cắt giảm 60 dòng code thừa; loại bỏ hoàn toàn khái niệm alias rườm rà. |
+| **Q2** | **Xóa tab `TX CLI` khỏi RX Bar** | Đã xóa nút khỏi `index.html` và code điều phối trong `app.js`. | ✅ **DONE** | Trả lại sự trong sáng, đúng nghĩa 100% cho thanh lệnh dành riêng cho Người Nhận. |
+| **Q3** | **Chuẩn hóa cú pháp dòng lệnh duy nhất** | Chuẩn hóa `wiredrop <room>` và `wiredrop <room> -r` trong `term_pipe.go`. | ✅ **DONE** | Triệt tiêu sự phân mảnh nhận thức; gõ ít nhất, dễ nhớ nhất. |
+| **Q4** | **Cập nhật Cheatsheet Trang Chủ** | Đổi lệnh curl POST dài thành pipe hiện đại trong `index.html` và `app.js`. | ✅ **DONE** | Giao diện thanh thoát, trực quan, đúng tinh thần tối giản. |
 
 ---
 
-*Tài liệu chuẩn bị đặc tả gọt tỉa đã sẵn sàng. Sau khi bạn phê duyệt 4 quyết định trên, chúng ta sẽ tiến hành dọn dẹp codebase để WireDrop đạt độ tinh khiết tối đa!*
+*Kết luận: WireDrop đã hoàn thành xuất sắc đợt gọt tỉa codebase, đạt chuẩn "vừa đủ để đạt mục tiêu" và chính thức bước vào trạng thái Đóng Băng Phạm Vi (Scope Freeze).*

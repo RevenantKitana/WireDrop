@@ -82,10 +82,6 @@ func parseTerminalPipeArgs(args []string) TerminalPipeOptions {
 		lower := strings.ToLower(arg)
 
 		switch lower {
-		case "open", "send", "s":
-			// Bỏ qua từ khóa hành động gửi
-		case "recv", "r":
-			opts.IsReceiver = true
 		case "-r", "--rx", "-rx", "--r":
 			opts.IsReceiver = true
 		case "-s", "-short", "--short", "--s":

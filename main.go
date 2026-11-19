@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-const Version = "v0.8.0"
+const Version = "v0.8.1"
 const defaultSlugChars = "abcdefghijklmnopqrstuvwxyz0123456789"
 
 func randomSlug(n int) string {
@@ -179,10 +179,8 @@ func createHandler() http.Handler {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	// 2. Health & Bootstrap Scripts & API
+	// 2. Health & API
 	mux.HandleFunc("GET /health", handleHealth)
-	mux.HandleFunc("GET /i", handleInitScriptLinux)
-	mux.HandleFunc("GET /i.ps1", handleInitScriptWindows)
 	mux.HandleFunc("POST /api/shorten", handleAPIShorten)
 
 	// 3. Quản lý trạng thái và SSE
@@ -255,9 +253,6 @@ func main() {
 		case "server", "--server":
 			// Chạy server thông thường với flag
 			runDedicatedServer(args[1:])
-			return
-		case "open":
-			runTerminalPipeCommand(args[1:])
 			return
 		case "-h", "--help", "-help":
 			printTerminalPipeHelp()

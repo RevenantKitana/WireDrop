@@ -54,10 +54,10 @@
                     <div class="home-guide-grid">
                         <div class="guide-col">
                             <strong>[1. BÊN PHÁT (TX)]</strong>
-                            <p>Terminal (đẩy script vào dây):</p>
-                            <code class="rx-cmd" id="homeGuideTx">curl -s -X POST --data-binary @script.sh host/:room-s</code>
-                            <p style="margin-top: 4px;">Hoặc truyền pipe trực tiếp:</p>
-                            <code class="rx-cmd" id="homeGuideTxPipe">echo "cmd" | curl -s -X POST --data-binary @- host/:room-s</code>
+                            <p>Terminal Pipe (đẩy script / file):</p>
+                            <code class="rx-cmd" id="homeGuideTx">cat script.sh | wiredrop :room</code>
+                            <p style="margin-top: 4px;">Web UI (trình duyệt):</p>
+                            <p>Bấm <strong>TX (PHÁT)</strong> để kéo thả file hoặc dán văn bản.</p>
                         </div>
                         <div class="guide-col">
                             <strong>[2. THỰC THI LỆNH (RX)]</strong>
@@ -175,7 +175,6 @@ Write-Host 'Hello from WireDrop' -ForegroundColor Green
                         <div class="os-tabs">
                             <button class="os-tab active" data-os="linux">LINUX</button>
                             <button class="os-tab" data-os="win">WIN</button>
-                            <button class="os-tab" data-os="tx">TX CLI</button>
                             <button class="os-tab" data-os="browser">URL</button>
                         </div>
                     </div>

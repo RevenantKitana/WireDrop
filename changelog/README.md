@@ -8,8 +8,9 @@ Mọi file được đặt tên theo quy chuẩn: `NN-v0.X.Y-<slug>.md` để đ
 
 ## Danh Sách Changelog Theo Các Giai Đoạn Phát Triển:
 
-### 🚀 Giai Đoạn 8: Terminal-Native Pipe & Rút Gọn Link Tuyển Chọn (v0.8.0)
-* [28-v0.8.0 - Terminal-Native Pipe Trực Tiếp, Cú Pháp Siêu Ngắn & Cơ Chế Rút Gọn Link Tuyển Chọn](28-v0.8.0-ultra-simplified-terminal-pipe-and-selective-shortlink.md) - *(2026-11-19)* 🚀 **Mới nhất (State hiện tại)**
+### 🚀 Giai Đoạn 8: Terminal-Native Pipe & Tinh Khiết Hóa Codebase (v0.8.x)
+* [29-v0.8.1 - Gọt Tỉa Codebase Cực Hạn, Triệt Tiêu Râu Ria & Đóng Băng Phạm Vi (Scope Freeze)](29-v0.8.1-codebase-pruning-and-minimalist-hardening.md) - *(2026-11-19)* 🚀 **Mới nhất (State hiện tại)**
+* [28-v0.8.0 - Terminal-Native Pipe Trực Tiếp, Cú Pháp Siêu Ngắn & Cơ Chế Rút Gọn Link Tuyển Chọn](28-v0.8.0-ultra-simplified-terminal-pipe-and-selective-shortlink.md) - *(2026-11-19)*
 
 ### ⚡ Giai Đoạn 7: Turbo Transfer Engine - Vi Khung Sub-Chunk & Pipelining (v0.7.x)
 * [27-v0.7.2 - Cổng Shortlink Siêu Tốc s.wd.io.vn: Kiến Trúc Phòng Vệ Đa Tầng & Tích Hợp Tự Động FastHost](27-v0.7.2-shortlink-gateway-swdio-and-fasthost-integration.md) - *(2026-11-19)*

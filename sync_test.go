@@ -1127,8 +1127,8 @@ func TestTerminalPipeArgsParsing(t *testing.T) {
 		t.Errorf("Case 4 lỗi: %+v", opt4)
 	}
 
-	// Case 5: 'wiredrop open testroom --rx --short'
-	opt5 := parseTerminalPipeArgs([]string{"open", "testroom", "--rx", "--short"})
+	// Case 5: 'wiredrop testroom --rx --short'
+	opt5 := parseTerminalPipeArgs([]string{"testroom", "--rx", "--short"})
 	if opt5.Slug != "testroom" || opt5.IsReceiver != true || opt5.UseShortlink != true {
 		t.Errorf("Case 5 lỗi: %+v", opt5)
 	}

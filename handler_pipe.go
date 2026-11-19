@@ -864,45 +864,6 @@ func handleChunkAbort(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "Session aborted"})
 }
 
-// handleInitScriptLinux trả về script bootstrap tạo phím tắt 'r' cho Linux (/i)
-func handleInitScriptLinux(w http.ResponseWriter, r *http.Request) {
-	host := r.Host
-	scheme := "http"
-	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
-		scheme = "https"
-	}
-
-	script := fmt.Sprintf(`# WireDrop Linux Helper
-r() {
-    local room="${1:-1}"
-    curl -sL "%s://%s/${room}-r" | sh
-}
-echo "✓ WireDrop alias 'r' initialized! Usage: r [room_id]"
-`, scheme, host)
-
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	_, _ = w.Write([]byte(script))
-}
-
-// handleInitScriptWindows trả về script bootstrap tạo phím tắt 'r' cho PowerShell (/i.ps1)
-func handleInitScriptWindows(w http.ResponseWriter, r *http.Request) {
-	host := r.Host
-	scheme := "http"
-	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
-		scheme = "https"
-	}
-
-	script := fmt.Sprintf(`# WireDrop Windows PowerShell Helper
-function r($room="1") {
-    irm "%s://%s/${room}-r" | iex
-}
-Write-Host "✓ WireDrop function 'r' initialized! Usage: r [room_id]" -ForegroundColor Green
-`, scheme, host)
-
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	_, _ = w.Write([]byte(script))
-}
-
 // handleHealth kiểm tra tình trạng sống của server
 func handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
