@@ -4,177 +4,137 @@
 
 [![Go Version](https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go)](https://golang.org)
 [![Dependencies](https://img.shields.io/badge/Dependencies-Zero%20(Standard%20Library)-brightgreen)](https://golang.org/pkg/)
-[![Version](https://img.shields.io/badge/Version-v0.6.2-blue)](changelog/README.md)
+[![Version](https://img.shields.io/badge/Version-v0.8.3-blue)](changelog/README.md)
 [![Architecture](https://img.shields.io/badge/Architecture-Two--Ended%20Wire%20(Physical%20Lock)-purple)](spec/README.md)
 [![License](https://img.shields.io/badge/License-MIT-orange.svg)](LICENSE)
 
 ---
 
+> **Kim chỉ nam tối thượng:**  
+> *"A giao dịch với B để ít quy trình nhất — Chân lý tối giản để vừa đạt."*
+
+---
+
 ## 🎯 Vấn Đề Giải Quyết (The Problem)
 
-Khi bạn quản trị máy ảo (VM), VPS, máy cứu hộ (Live ISO), hoặc thiết bị nhúng không có sẵn chia sẻ clipboard, việc copy một câu lệnh dài, script cài đặt, token bí mật hay file nhị phân từ máy chính (Host) sang máy đích (Guest/VM) thường rất phiền toái:
-* Không thể copy-paste trực tiếp qua cửa sổ console máy ảo (VNC, NoVNC, Proxmox, VMware Console).
-* Gõ tay từng ký tự rất dễ sai sót và mất thời gian.
-* Dùng các dịch vụ pastebin công cộng vừa rườm rà, vừa lộ dữ liệu nhạy cảm, lại không hỗ trợ kéo thả file nhị phân hay streaming trực tiếp.
-* Các công cụ chia sẻ 2 chiều (shared notepad) thường gây xung đột ghi đè dữ liệu giữa 2 bên.
+Khi bạn quản trị máy ảo (VMware, Proxmox, VirtualBox, Alpine Linux), máy chủ từ xa (VPS), container Docker hoặc thiết bị di động không có chia sẻ clipboard:
+* Không thể copy-paste trực tiếp qua cửa sổ console máy ảo (VNC, NoVNC, Web Console).
+* Gõ tay từng lệnh dài, token bí mật hay URL rất dễ sai sót và ức chế.
+* Dùng pastebin công cộng vừa rườm rà, vừa lộ bí mật, vừa không hỗ trợ truyền file hay streaming trực tiếp.
+* Các công cụ 2 chiều (shared notepad) thường gây xung đột ghi đè dữ liệu.
 
-**WireDrop** ra đời để giải quyết triệt để vấn đề này với mô hình: **"Một sợi dây vật lý 2 đầu thuần 1 chiều"**.
+**WireDrop** giải quyết triệt để vấn đề này với mô hình: **"Sợi dây vật lý 2 đầu thuần 1 chiều"** (`TX` $\rightarrow$ `RX`).
 
-```
-[ ĐẦU PHÁT: 1-s ] ══════════════ SỢI DÂY PHÒNG 1 ══════════════> [ ĐẦU NHẬN: 1-r ]
-  (Máy A - Master)                                                 (Máy B - Worker)
-  • Web Soạn thảo & Thả File                                       • PowerShell: irm .../1-r | iex
-  • Toàn quyền chỉnh sửa                                           • Linux bash: curl .../1-r | sh
-  • Khóa 1 kết nối phát                                            • Khóa 1 kết nối nhận (409 Busy)
+```text
+[ ĐẦU PHÁT: TX (*-s) ] ══════════════ SỢI DÂY (SLOT 1-1) ══════════════> [ ĐẦU NHẬN: RX (*-r) ]
+  • Web Soạn thảo / Thả file                                               • Alpine: wget -qO- <URL> | sh
+  • Terminal Pipe: wiredrop 88                                             • Linux:  curl -sL <URL> | sh
+  • Khóa 1 kết nối phát                                                    • Windows: irm <URL> | iex
+  • Huy hiệu Delivered ACK khi máy đích nhận                               • Khóa 1 kết nối nhận (409 Busy)
 ```
 
 ---
 
 ## ✨ Tính Năng Nổi Bật (Key Features)
 
-* 🔌 **Sợi dây 2 đầu thuần 1 chiều (Unidirectional Two-Ended Wire):** Phân tách tuyệt đối giữa Bên Phát (`*-s`) và Bên Nhận (`*-r`). Bên nhận chỉ thuần túy đọc/chạy lệnh, không có ô soạn thảo để làm bẩn hay ghi đè kịch bản gốc.
-* 🔒 **Khóa kết nối vật lý 1-1 (Pure Physical Connection Lock):** Không cần tài khoản, mật khẩu hay token thủ công. Mỗi đầu dây chỉ chấp nhận **DUY NHẤT 1 kết nối mạng active**. Nếu mở double tab trên cùng máy hay cùng mạng, tab thứ hai lập tức bị chặn với mã `HTTP 409 Line Busy`.
-* 🛡️ **Loại trừ tuyệt đối giữa Web và CLI (Mutual Exclusion):** Nếu đang mở cửa sổ Web nhận, Terminal CLI sẽ bị chặn `409` để chống xung đột; khi đóng cửa sổ Web, khóa tự giải phóng tức thì trong vài mili-giây để CLI cắm vào tiêu thụ.
-* 📦 **Đơn vị dữ liệu nguyên tử (Single Atomic Slot):** Một phòng tại một thời điểm chỉ chứa đúng **1 Script/Text HOẶC 1 File duy nhất**. Gửi cái mới sẽ tự động thay thế cái cũ.
-* 💥 **Tự hủy sau khi nhận (Burn-After-Read):** Dữ liệu tự động biến mất khỏi bộ nhớ RAM của server ngay sau khi máy nhận tải về 1 lần, bảo mật tối đa.
-* 🛡️ **Chống sập PowerShell (Empty Slot Protection):** Khi phòng đang trống, server tự trả về comment `# WireDrop: (empty)\n` $\rightarrow$ Lệnh `irm ... | iex` trên Windows thoát êm xuôi mã 0, không bao giờ bị lỗi `EmptyStringNotAllowed`.
-* 🌊 **Live Terminal Pipe:** Hỗ trợ cắm thẳng luồng lệnh trực tiếp từ Web sang bash qua lệnh `curl -sN .../1-r | bash`.
-* 🪶 **100% Go Standard Library (Zero-Dependency):** Biên dịch thành 1 file nhị phân duy nhất (~6.8 MB), nhúng sẵn toàn bộ Web SPA Dark Mode (`//go:embed`), tiêu tốn chỉ ~10MB RAM.
+* 🔌 **Sợi dây 2 đầu thuần 1 chiều (Unidirectional Two-Ended Wire):** Phân tách tuyệt đối giữa Bên Phát (`*-s`) và Bên Nhận (`*-r`). Bên nhận chỉ thuần túy đọc/chạy lệnh, không có ô soạn thảo để làm bẩn kịch bản gốc.
+* 🔒 **Khóa kết nối vật lý 1-1 (Pure Physical Connection Lock):** Không tài khoản, không token. Mỗi đầu dây chỉ chấp nhận **DUY NHẤT 1 kết nối active**. Cửa sổ thứ hai cố cắm vào bị chặn ngay lập tức với mã `HTTP 409 Line Busy`.
+* 🛡️ **Loại trừ tuyệt đối Web vs CLI (Mutual Exclusion):** Mở Web nhận thì chặn CLI; đóng Web nhận thì khóa tự giải phóng tức thì cho CLI cắm vào.
+* 📦 **Đơn vị dữ liệu nguyên tử (Single Atomic Slot):** Mỗi phòng chỉ chứa đúng **1 Script/Text HOẶC 1 File**. Nạp cái mới tự động thay thế cái cũ.
+* 🚀 **Terminal-Native Pipe Siêu Tốc:** Điều khiển trực tiếp từ dòng lệnh như `netcat`/`ssh` pipe mà không cần mở trình duyệt (`cat file | wiredrop 88`).
+* ⚡ **Turbo Transfer Engine (Zero-Disk):** Vi khung Sub-Chunk 256KB truyền file lớn vượt giới hạn 100MB Cloudflare Edge qua bộ đệm kép Ping-Pong, 0 byte ghi đĩa server.
+* 🏔️ **Hỗ trợ toàn diện Alpine Linux / BusyBox:** Cung cấp sẵn cú pháp `wget -qO-` hoạt động 100% out-of-the-box trên các OS tối giản không có `curl`.
+* 📡 **Huy hiệu Delivered ACK:** Bên phát nhận được thông báo thời gian thực khi máy nhận đã kéo lệnh hoặc tải file thành công (`✓ ĐÃ ĐẾN MÁY ĐÍCH`).
+* 🔄 **Hỗ trợ Luồng Nghịch (Reverse Flow):** Host RX (`wiredrop 88 -r`) tự động in Cheatsheet Uplink cho Guest VM/Phone đẩy log hoặc file ngược về Host.
+* 🪶 **100% Go Standard Library (Zero-Dependency):** 0 thư viện ngoài, đóng gói 1 file binary duy nhất (~8MB), nhúng sẵn Web Retro Monochrome Minimalist (`//go:embed`), RAM tiêu thụ chỉ ~10MB.
 
 ---
 
-## 🚀 Khởi Động Nhanh (Quick Start)
+## 🚀 Cài Đặt Nhanh (Installation)
 
-### 1. Tải về hoặc Biên dịch từ mã nguồn
+### Cách 1: Cài đặt 1-Click vào Windows User PATH (Zero-Admin)
+Nhấp đúp file **`install.bat`** ở thư mục gốc (hoặc chạy trong PowerShell):
+```powershell
+.\install.bat
+```
+Lệnh sẽ tự động biên dịch và sao chép vào `%LOCALAPPDATA%\Microsoft\WindowsApps\wiredrop.exe`.  
+Kể từ đó, bạn có thể mở bất kỳ cửa sổ CMD/PowerShell nào và gõ trực tiếp `wiredrop`!
 
+### Cách 2: Tự biên dịch từ mã nguồn (Linux / macOS / Windows)
 Yêu cầu: Go 1.22 trở lên.
-
 ```bash
-# Clone repository
 git clone https://github.com/RevenantKitana/WireDrop.git
 cd WireDrop
 
-# Biên dịch binary siêu nhẹ (Stripped symbols)
-go build -ldflags="-s -w" -o wiredrop .
-```
-
-### 2. Chạy Server
-
-```bash
-# Chạy với cổng mặc định 8080:
-./wiredrop
-
-# Hoặc chỉ định cổng tùy ý:
-PORT=18080 ./wiredrop
+# Biên dịch ra thư mục bin/
+go build -ldflags="-s -w" -o bin/wiredrop .
 ```
 
 ---
 
 ## 📖 Hướng Dẫn Sử Dụng (Usage)
 
-### Chiều truyền: Máy A (Phát) $\rightarrow$ Máy B (Nhận)
+### 1. Sử Dụng Qua Dòng Lệnh (Terminal-Native Pipe)
 
-#### Bước 1: Máy A (Bên Phát / Master)
-Mở trình duyệt: `http://<IP_Server>:8080/1-s`  
-*(Giao diện Dark Mode có ô soạn thảo auto-save và vùng kéo thả file).*
+| Lệnh | Ý nghĩa |
+| :--- | :--- |
+| `wiredrop 88` | Mở console tương tác phát văn bản / nạp file vào phòng 88 |
+| `wiredrop 88 -s` | Mở console phát kèm rút gọn link qua `s.wd.io.vn` (12 ký tự) |
+| `wiredrop 88 -r` | Lắng nghe dữ liệu phòng 88 trên terminal (kèm Cheatsheet cho máy khách) |
+| `wiredrop 88 -r -s` | Lắng nghe với Cheatsheet Uplink rút gọn `s.wd.io.vn` |
+| `cat script.sh \| wiredrop 88` | Bơm trực tiếp file/script từ terminal vào phòng 88 |
+| `wiredrop 88 -r \| bash` | Hứng dữ liệu từ phòng 88 và thực thi thẳng qua bash (Silent Mode) |
+| `wiredrop host` | Tự động tạo Cloudflare Quick Tunnel public ra Internet |
+| `wiredrop install` | Cài đặt `wiredrop` vào Windows PATH toàn cục |
 
-#### Bước 2: Máy B (Bên Nhận / Worker)
+### 2. Sử Dụng Qua Giao Diện Web (Retro Monochrome UI)
 
-Chỉ cần nhớ duy nhất 1 địa chỉ: `domain.com/:room-r`
+* **Trang chủ điều phối:** Mở `http://localhost:8080/#` để nhập mã phòng nhanh.
+* **Bên Phát (TX):** Mở `http://localhost:8080/88-s` để dán văn bản, kéo thả file, xem lịch sử 3 gói text gần nhất và nhận huy hiệu Delivered ACK.
+* **Bên Nhận (RX):** Mở `http://localhost:8080/88-r` để xem dữ liệu, copy, tải file (Native OS tải ngầm), hoặc bấm nút `[⚡ COPY LINK MỜI GỬI (TX)]` để gửi cho máy khách.
 
-| Nhu cầu của Máy B | Lệnh trên Linux / macOS | Lệnh trên Windows PowerShell |
+### 3. Câu Lệnh Kéo Về Máy Khách (0 Cần Cài Đặt)
+
+| Hệ điều hành máy khách | Kéo script chạy ngay | Tải file nhị phân về đĩa |
 | :--- | :--- | :--- |
-| **Kéo script về chạy ngay** | `curl -sL http://<IP>:8080/1-r \| sh` | `irm http://<IP>:8080/1-r \| iex` |
-| **Tải file nhị phân về** | `curl -sLJO http://<IP>:8080/1-r` | `iwr http://<IP>:8080/1-r -OutFile file.zip` |
-| **Live Stream Pipe** | `curl -sN http://<IP>:8080/1-r \| bash` | *(Lắng nghe thời gian thực)* |
-| **Xem qua Trình duyệt** | Mở `http://<IP>:8080/1-r` *(Giao diện Read-Only, chỉ xem & copy)* | |
+| **Linux / macOS (`curl`)** | `curl -sL <URL>/88-r \| sh` | `curl -sLJO <URL>/88-r` |
+| **Alpine Linux / BusyBox (`wget`)** | `wget -qO- <URL>/88-r \| sh` | `wget -O <file> <URL>/88-r` |
+| **Windows PowerShell** | `irm <URL>/88-r \| iex` | `iwr <URL>/88-r -OutFile <file>` |
+| **Trình duyệt / Mobile** | Mở `<URL>/88-r` | Bấm `[TẢI FILE VỀ MÁY]` |
 
 ---
 
-### Khi Máy B muốn gửi kết quả ngược lại cho Máy A?
-Áp dụng nguyên lý đối xứng: **Máy B mở một phòng mới (ví dụ phòng `2`)**:
-* Máy B là bên phát: Mở `http://<IP>:8080/2-s`
-* Máy A là bên nhận: Cắm vào `http://<IP>:8080/2-r`
-* *Hai sợi dây hoàn toàn độc lập, không làm bẩn ô lệnh gốc tại phòng 1.*
-
----
-
-### ⚡ Phím Tắt Tiện Ích (Quick Aliases)
-WireDrop tích hợp sẵn script tạo phím tắt `r [room_id]` cực ngắn trên terminal máy khách:
-* **Linux:** `curl -sL http://<IP>:8080/i | sh` $\rightarrow$ Từ sau chỉ cần gõ `r` hoặc `r 2`.
-* **Windows PowerShell:** `irm http://<IP>:8080/i.ps1 | iex` $\rightarrow$ Từ sau chỉ cần gõ `r` hoặc `r 2`.
-
----
-
-## 🚢 Hướng Dẫn Deploy (Deployment)
-
-### 1. Deploy bằng Systemd trên Linux VPS
-
-Biên dịch cho Linux:
-```powershell
-$env:GOOS="linux"; $env:GOARCH="amd64"; go build -ldflags="-s -w" -o wiredrop .
-```
-
-Tạo file dịch vụ `/etc/systemd/system/wiredrop.service`:
-```ini
-[Unit]
-Description=WireDrop Service
-After=network.target
-
-[Service]
-Type=simple
-User=root
-Environment="PORT=8080"
-ExecStart=/usr/local/bin/wiredrop
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Khởi chạy:
-```bash
-sudo systemctl enable --now wiredrop
-```
-
-> **Lưu ý cấu hình Nginx Reverse Proxy (Quan trọng cho SSE & Streaming):**  
-> Phải thêm `proxy_buffering off;` và `proxy_read_timeout 86400s;` để không bị ngắt luồng giữ kết nối vật lý.
-
-### 2. Deploy bằng Docker (Image ~7MB `FROM scratch`)
-
-```bash
-docker build -t wiredrop .
-docker run -d --name wiredrop -p 8080:8080 --restart unless-stopped wiredrop
-```
-
-### 3. Public nhanh từ máy cá nhân qua Cloudflare Tunnel (Không cần VPS)
-
-```bash
-cloudflared tunnel --url http://localhost:8080
-```
-
----
-
-## 📂 Cấu Trúc Dự Án (Project Structure)
+## 📂 Cấu Trúc Thư Mục Ngăn Nắp (Clean Project Layout)
 
 ```text
 WireDrop/
-├── main.go            # Entry point, routing Go 1.22+ ServeMux, embedded assets
-├── room.go            # Quản lý PipeSlot, ChunkSession, khóa ActiveConn, Mutex RAM, TTL cleaner
-├── handler_pipe.go    # Điều phối đầu *-s / *-r, 16MB chunked pipe, streaming flusher, SSE events
-├── host.go            # Công cụ FastHost tích hợp tự động Cloudflare Tunnel cho bản Portable
-├── go.mod             # Module definition (Zero third-party dependencies)
-├── Dockerfile         # Multi-stage build (Alpine -> Scratch ~7MB)
-├── public/            # Giao diện Web SPA Retro Monochrome Minimalist được nhúng tĩnh
-│   ├── index.html     # HTML thống nhất Home / Sender / Receiver View & Multi-Batch Dashboard
-│   ├── style.css      # Giao diện đơn sắc tối giản, lưới mảnh .batch-grid
-│   └── app.js         # Chunked Ping-Pong Upload, Direct-to-Disk RX Stream, SSE & Hybrid Sync
-├── spec/              # Kho tài liệu Đặc tả Kiến trúc (APPROVED SPEC) & Chuẩn bị Đặc tả (SPEC-PREPARE)
-└── changelog/         # Lịch sử phát triển chi tiết từng mốc phiên bản (Sort-Safe Naming)
+├── changelog/          # Lịch sử 31 phiên bản kỹ thuật súc tích + README.md
+├── gateway/            # Cloudflare Worker Gateway cho cổng shortlink s.wd.io.vn
+├── public/             # Web SPA Retro Monochrome nhúng tĩnh (HTML, CSS, JS)
+├── scripts/            # Script phụ trợ tiện ích (build.bat, install.bat)
+├── spec/               # Tài liệu Đặc tả Kiến trúc chính thức + Checklist nghiệm thu 360°
+│
+├── .dockerignore       # Loại trừ file rác khi build Docker
+├── .env.example        # Cấu hình biến môi trường mẫu (PORT, TUNNEL_TOKEN...)
+├── .gitignore          # Chặn sạch *.exe, bin/, dist/ không lọt vào git
+├── CLAUDE.md           # Bộ quy tắc quản lý dự án & chuẩn Keep a Changelog tinh khiết
+├── Dockerfile          # Multi-stage Docker build (~7MB image)
+├── LICENSE             # Giấy phép MIT
+├── README.md           # Tài liệu hướng dẫn chính thức (v0.8.3)
+├── go.mod              # Module definition (100% Go Standard Library)
+├── install.bat         # Trình cài đặt 1-click vào Windows PATH
+│
+├── handler_pipe.go     # Xử lý luồng HTTP Sợi dây 2 đầu (*-s vs *-r, Turbo sub-chunk)
+├── host.go             # FastHost native (tự động hóa Cloudflare Tunnel)
+├── main.go             # Khởi động server, ServeMux routing, version single source of truth
+├── room.go             # Quản lý RAM, mutex, khóa vật lý 1-1, atomic slot
+├── sync_test.go        # 22 bài test tự động bao phủ toàn diện
+└── term_pipe.go        # Terminal-Native Pipe, REPL console & Live Stream
 ```
 
 ---
 
 ## 📄 Bản Quyền (License)
 
-Dự án được phân phối dưới giấy phép **MIT License**. Mọi đóng góp (Pull Request, Issue) đều được chào đón nồng nhiệt!
+Dự án được phân phối dưới giấy phép **[MIT License](LICENSE)**.
+Mọi đóng góp, phản hồi và ý kiến cải tiến luôn được hoan nghênh!
