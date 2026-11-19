@@ -313,7 +313,7 @@ func runPortableHost() {
 
 		fmt.Println()
 		fmt.Println("================================================================")
-		fmt.Printf("     ⚡ WIREDROP PORTABLE %s - CLOUDFLARE TUNNEL LAUNCHER      \n", Version)
+		fmt.Printf("     ⚡ WIREDROP %s - LAUNCHER & CLOUDFLARE TUNNEL      \n", Version)
 		fmt.Println("================================================================")
 		fmt.Println(" [1] Domain ngau nhien (Quick Tunnel - Mac dinh)")
 		fmt.Printf(" [2] %s\n", labelCustom)

@@ -8,10 +8,10 @@ echo   INSTALLING WIREDROP TO WINDOWS USER PATH
 echo ================================================================
 echo.
 
-if not exist "bin\wiredrop.exe" (
-    if not exist "bin" mkdir bin
-    echo [*] Dang bien dich bin\wiredrop.exe ...
-    go build -ldflags="-s -w" -o bin\wiredrop.exe .
+if not exist "dist\wiredrop.exe" (
+    if not exist "dist" mkdir dist
+    echo [*] Dang bien dich dist\wiredrop.exe ...
+    go build -ldflags="-s -w" -o dist\wiredrop.exe .
     if %ERRORLEVEL% NEQ 0 (
         echo [X] Bien dich that bai!
         pause
@@ -19,6 +19,6 @@ if not exist "bin\wiredrop.exe" (
     )
 )
 
-bin\wiredrop.exe install
+dist\wiredrop.exe install
 echo.
 pause

@@ -240,9 +240,6 @@ func runServer(port string, printBanner bool) (*http.Server, error) {
 }
 
 func main() {
-	exeName := filepath.Base(os.Args[0])
-	isPortableExe := strings.Contains(strings.ToLower(exeName), "portable")
-
 	args := os.Args[1:]
 
 	if len(args) > 0 {
@@ -274,8 +271,8 @@ func main() {
 		}
 	}
 
-	// Nếu là bản portable (không truyền tham số)
-	if isPortableExe {
+	// Khi nhấp đúp chuột hoặc chạy không truyền tham số: Mở Interactive Launcher (FastHost / Local)
+	if len(args) == 0 {
 		runPortableHost()
 		return
 	}

@@ -8,21 +8,12 @@ echo   BUILDING WIREDROP (100%% GO STANDARD LIBRARY)
 echo ================================================================
 echo.
 
-if not exist "bin" mkdir bin
 if not exist "dist" mkdir dist
 
-echo [*] Bien dich bin\wiredrop.exe ...
-go build -ldflags="-s -w" -o bin\wiredrop.exe .
+echo [*] Bien dich dist\wiredrop.exe ...
+go build -ldflags="-s -w" -o dist\wiredrop.exe .
 if %ERRORLEVEL% NEQ 0 (
-    echo [X] Bien dich bin\wiredrop.exe that bai!
-    pause
-    exit /b %ERRORLEVEL%
-)
-
-echo [*] Bien dich dist\wiredrop-portable.exe ...
-go build -ldflags="-s -w" -o dist\wiredrop-portable.exe .
-if %ERRORLEVEL% NEQ 0 (
-    echo [X] Bien dich dist\wiredrop-portable.exe that bai!
+    echo [X] Bien dich that bai!
     pause
     exit /b %ERRORLEVEL%
 )
@@ -30,8 +21,7 @@ if %ERRORLEVEL% NEQ 0 (
 echo.
 echo ================================================================
 echo   [OK] BIEN DICH HOAN TAT!
-echo   - Binary noi bo:  bin\wiredrop.exe
-echo   - Binary portable: dist\wiredrop-portable.exe
+echo   File thuc thi duy nhat: dist\wiredrop.exe
 echo ================================================================
 echo.
 pause
